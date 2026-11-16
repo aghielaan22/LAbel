@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -50,7 +51,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 @Composable
-fun NowPlayingScreen(onClose: () -> Unit) {
+fun NowPlayingContent(onClose: () -> Unit) {
     BackHandler(onBack = onClose)
 
     val song = PlayerController.currentSong
@@ -91,7 +92,9 @@ fun NowPlayingScreen(onClose: () -> Unit) {
         }
     }
 
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Surface(modifier = Modifier.fillMaxSize(),
+        color = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onSurface) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
