@@ -20,8 +20,12 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -44,11 +48,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.media3.common.Player
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+
+enum class PlayerPane { Artwork, Lyrics, Queue }
 
 @Composable
 fun NowPlayingContent(onClose: () -> Unit) {
@@ -59,7 +66,7 @@ fun NowPlayingContent(onClose: () -> Unit) {
     var duration by remember { mutableLongStateOf(0L) }
     var dragging by remember { mutableStateOf(false) }
     var sliderValue by remember { mutableFloatStateOf(0f) }
-    var showLyrics by remember { mutableStateOf(false) }
+    var pane by remember { mutableStateOf(PlayerPane.Artwork) }
     var lyrics by remember { mutableStateOf<List<LyricLine>?>(null) }
 
     // Keeps position and duration up to date
@@ -73,9 +80,9 @@ fun NowPlayingContent(onClose: () -> Unit) {
         }
     }
 
-    // Loads lyrics when the lyrics view is open, and again for each new song
-    LaunchedEffect(song?.id, showLyrics) {
-        if (!showLyrics || song == null) return@LaunchedEffect
+    // Loads lyrics when the lyrics pane is open, and again for each new song
+    LaunchedEffect(song?.id, pane) {
+        if (pane != PlayerPane.Lyrics || song == null) return@LaunchedEffect
         lyrics = null
         var waited = 0
         while (PlayerController.duration() <= 0 && waited < 5000) {
@@ -92,9 +99,11 @@ fun NowPlayingContent(onClose: () -> Unit) {
         }
     }
 
-    Surface(modifier = Modifier.fillMaxSize(),
+    Surface(
+        modifier = Modifier.fillMaxSize(),
         color = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.onSurface) {
+        contentColor = MaterialTheme.colorScheme.onSurface
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -110,8 +119,29 @@ fun NowPlayingContent(onClose: () -> Unit) {
                 IconButton(onClick = onClose) {
                     Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close player")
                 }
-                TextButton(onClick = { showLyrics = !showLyrics }) {
-                    Text(if (showLyrics) "Artwork" else "Lyrics")
+                Row {
+                    TextButton(
+                        onClick = {
+                            pane = if (pane == PlayerPane.Queue) PlayerPane.Artwork
+                            else PlayerPane.Queue
+                        },
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = if (pane == PlayerPane.Queue)
+                                MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    ) { Text("Queue") }
+                    TextButton(
+                        onClick = {
+                            pane = if (pane == PlayerPane.Lyrics) PlayerPane.Artwork
+                            else PlayerPane.Lyrics
+                        },
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = if (pane == PlayerPane.Lyrics)
+                                MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    ) { Text("Lyrics") }
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -122,8 +152,8 @@ fun NowPlayingContent(onClose: () -> Unit) {
                     .aspectRatio(1f),
                 contentAlignment = Alignment.Center
             ) {
-                if (showLyrics) {
-                    LyricsView(
+                when (pane) {
+                    PlayerPane.Lyrics -> LyricsView(
                         lines = lyrics,
                         positionMs = position,
                         onSeek = {
@@ -132,9 +162,11 @@ fun NowPlayingContent(onClose: () -> Unit) {
                         },
                         modifier = Modifier.fillMaxSize()
                     )
-                } else {
-                    AsyncImage(
-                        model = song?.thumbnailUrl,
+
+                    PlayerPane.Queue -> QueueView(modifier = Modifier.fillMaxSize())
+
+                    PlayerPane.Artwork -> AsyncImage(
+                        model = song?.artworkUrl(1200),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
@@ -203,9 +235,22 @@ fun NowPlayingContent(onClose: () -> Unit) {
             Spacer(Modifier.height(16.dp))
 
             Row(
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                IconButton(
+                    onClick = { PlayerController.toggleShuffle() },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Shuffle,
+                        contentDescription = "Shuffle",
+                        tint = if (PlayerController.shuffleEnabled)
+                            MaterialTheme.colorScheme.primary
+                        else LocalContentColor.current
+                    )
+                }
                 IconButton(
                     onClick = { PlayerController.previous() },
                     modifier = Modifier.size(56.dp)
@@ -235,6 +280,19 @@ fun NowPlayingContent(onClose: () -> Unit) {
                         Icons.Default.SkipNext,
                         contentDescription = "Next",
                         modifier = Modifier.size(36.dp)
+                    )
+                }
+                IconButton(
+                    onClick = { PlayerController.cycleRepeatMode() },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = if (PlayerController.repeatMode == Player.REPEAT_MODE_ONE)
+                            Icons.Default.RepeatOne else Icons.Default.Repeat,
+                        contentDescription = "Repeat",
+                        tint = if (PlayerController.repeatMode != Player.REPEAT_MODE_OFF)
+                            MaterialTheme.colorScheme.primary
+                        else LocalContentColor.current
                     )
                 }
             }

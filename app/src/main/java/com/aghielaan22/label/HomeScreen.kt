@@ -29,6 +29,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier) {
@@ -102,15 +110,25 @@ fun SongShelf(title: String, songs: List<Song>) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SongCard(song: Song, onClick: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    var sheetOpen by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .width(140.dp)
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    sheetOpen = true
+                }
+            )
     ) {
         AsyncImage(
-            model = song.thumbnailUrl,
+            model = song.artworkUrl(512),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
@@ -131,5 +149,9 @@ fun SongCard(song: Song, onClick: () -> Unit) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+
+    if (sheetOpen) {
+        SongOptionsSheet(song = song, onDismiss = { sheetOpen = false })
     }
 }

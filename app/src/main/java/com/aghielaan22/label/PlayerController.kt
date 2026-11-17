@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.net.Uri
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
@@ -18,8 +19,11 @@ object PlayerController {
 
     private var controller: MediaController? = null
     private var connecting = false
-    private var queue: List<Song> = emptyList()
 
+    var queueSongs by mutableStateOf<List<Song>>(emptyList())
+        private set
+    var currentIndex by mutableIntStateOf(0)
+        private set
     var currentSong by mutableStateOf<Song?>(null)
         private set
     var isPlaying by mutableStateOf(false)
@@ -27,6 +31,10 @@ object PlayerController {
     var isLoading by mutableStateOf(false)
         private set
     var errorMessage by mutableStateOf<String?>(null)
+        private set
+    var shuffleEnabled by mutableStateOf(false)
+        private set
+    var repeatMode by mutableIntStateOf(Player.REPEAT_MODE_OFF)
         private set
 
     private val listener = object : Player.Listener {
@@ -39,8 +47,18 @@ object PlayerController {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            currentSong = queue.firstOrNull { it.id == mediaItem?.mediaId }
+            val index = controller?.currentMediaItemIndex ?: 0
+            currentIndex = index
+            currentSong = if (mediaItem == null) null else queueSongs.getOrNull(index)
             currentSong?.let { HistoryRepository.add(it) }
+        }
+
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+            shuffleEnabled = shuffleModeEnabled
+        }
+
+        override fun onRepeatModeChanged(repeatMode: Int) {
+            this@PlayerController.repeatMode = repeatMode
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -66,7 +84,11 @@ object PlayerController {
         )
         val future = MediaController.Builder(appContext, token).buildAsync()
         future.addListener({
-            controller = future.get().also { it.addListener(listener) }
+            val c = future.get()
+            c.addListener(listener)
+            shuffleEnabled = c.shuffleModeEnabled
+            repeatMode = c.repeatMode
+            controller = c
             connecting = false
         }, ContextCompat.getMainExecutor(appContext))
     }
@@ -78,11 +100,68 @@ object PlayerController {
             return
         }
         errorMessage = null
-        queue = songs
+        queueSongs = songs
+        currentIndex = startIndex
+        currentSong = songs.getOrNull(startIndex)
         c.setMediaItems(songs.map { it.toMediaItem() }, startIndex, 0L)
         c.prepare()
         c.play()
-        currentSong = songs.getOrNull(startIndex)
+    }
+
+    /** Jumps to the song at [index] in the current queue. */
+    fun playQueueIndex(index: Int) {
+        controller?.let {
+            it.seekToDefaultPosition(index)
+            it.play()
+        }
+    }
+
+    fun removeFromQueue(index: Int) {
+        val c = controller ?: return
+        if (index !in queueSongs.indices) return
+        queueSongs = queueSongs.toMutableList().apply { removeAt(index) }
+        c.removeMediaItem(index)
+        currentIndex = c.currentMediaItemIndex
+    }
+
+    /** Puts [song] right after the one that's playing. */
+    fun playNext(song: Song) {
+        val c = controller
+        if (c == null || queueSongs.isEmpty()) {
+            playQueue(listOf(song), 0)   // nothing queued yet, so just start it
+            return
+        }
+        val insertAt = c.currentMediaItemIndex + 1
+        queueSongs = queueSongs.toMutableList().apply {
+            add(insertAt.coerceAtMost(size), song)
+        }
+        c.addMediaItem(insertAt, song.toMediaItem())
+    }
+
+    /** Puts [song] at the end of the queue. */
+    fun addToQueue(song: Song) {
+        val c = controller
+        if (c == null || queueSongs.isEmpty()) {
+            playQueue(listOf(song), 0)
+            return
+        }
+        queueSongs = queueSongs + song
+        c.addMediaItem(song.toMediaItem())
+    }
+
+    fun toggleShuffle() {
+        controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled }
+    }
+
+    /** Cycles repeat: off, then all songs, then one song, then off again. */
+    fun cycleRepeatMode() {
+        controller?.let {
+            it.repeatMode = when (it.repeatMode) {
+                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                else -> Player.REPEAT_MODE_OFF
+            }
+        }
     }
 
     fun togglePlayPause() {
@@ -108,12 +187,12 @@ object PlayerController {
     private fun Song.toMediaItem(): MediaItem =
         MediaItem.Builder()
             .setMediaId(id)
-            .setUri(id) // the YouTube link; the service turns it into audio
+            .setUri(id)
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(title)
                     .setArtist(artist)
-                    .setArtworkUri(thumbnailUrl?.let { Uri.parse(it) })
+                    .setArtworkUri(artworkUrl(800)?.let { Uri.parse(it) })
                     .build()
             )
             .build()

@@ -40,7 +40,7 @@ fun MiniPlayer(onClick: () -> Unit, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
-                model = song.thumbnailUrl,
+                model = song.artworkUrl(192),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier

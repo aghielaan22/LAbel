@@ -25,6 +25,8 @@ class MainActivity : ComponentActivity() {
         PlayerController.connect(this)
         LibraryRepository.init(this)
         HistoryRepository.init(this)
+        PlaylistRepository.init(this)
+        SearchHistoryRepository.init(this)
         if (Build.VERSION.SDK_INT >= 33) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }

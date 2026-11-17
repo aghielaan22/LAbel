@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,7 +44,10 @@ fun LAbelApp() {
                         Tab.entries.forEach { tab ->
                             NavigationBarItem(
                                 selected = selectedTab == tab,
-                                onClick = { selectedTab = tab },
+                                onClick = {
+                                    selectedTab = tab
+                                    Navigator.clear() // leave any open album or artist page
+                                },
                                 icon = { Icon(tab.icon, contentDescription = tab.label) },
                                 label = { Text(tab.label) }
                             )
@@ -52,11 +56,29 @@ fun LAbelApp() {
                 }
             }
         ) { innerPadding ->
-            val screenModifier = Modifier.padding(innerPadding)
-            when (selectedTab) {
-                Tab.Home -> HomeScreen(screenModifier)
-                Tab.Search -> SearchScreen(screenModifier)
-                Tab.Library -> LibraryScreen(screenModifier)
+            Box(
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .fillMaxSize()
+            ) {
+                when (selectedTab) {
+                    Tab.Home -> HomeScreen()
+                    Tab.Search -> SearchScreen()
+                    Tab.Library -> LibraryScreen()
+                }
+
+                // Album and artist pages are drawn over the current tab
+                when (val page = Navigator.current) {
+                    is DetailPage.AlbumPage -> Surface(modifier = Modifier.fillMaxSize()) {
+                        AlbumScreen(page.album, onBack = { Navigator.back() })
+                    }
+
+                    is DetailPage.ArtistPage -> Surface(modifier = Modifier.fillMaxSize()) {
+                        ArtistScreen(page.artist, onBack = { Navigator.back() })
+                    }
+
+                    null -> Unit
+                }
             }
         }
 

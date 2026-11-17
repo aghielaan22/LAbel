@@ -3,7 +3,7 @@ package com.aghielaan22.label
 import org.json.JSONArray
 import org.json.JSONObject
 
-fun List<Song>.toJsonString(): String {
+fun List<Song>.toJsonArray(): JSONArray {
     val array = JSONArray()
     forEach { s ->
         array.put(
@@ -15,12 +15,13 @@ fun List<Song>.toJsonString(): String {
             }
         )
     }
-    return array.toString()
+    return array
 }
 
-fun parseSongs(json: String): List<Song> {
-    val array = JSONArray(json)
-    return (0 until array.length()).map { i ->
+fun List<Song>.toJsonString(): String = toJsonArray().toString()
+
+fun parseSongs(array: JSONArray): List<Song> =
+    (0 until array.length()).map { i ->
         val o = array.getJSONObject(i)
         Song(
             id = o.getString("id"),
@@ -29,4 +30,5 @@ fun parseSongs(json: String): List<Song> {
             thumbnailUrl = o.optString("thumbnailUrl").takeIf { it.isNotEmpty() }
         )
     }
-}
+
+fun parseSongs(json: String): List<Song> = parseSongs(JSONArray(json))

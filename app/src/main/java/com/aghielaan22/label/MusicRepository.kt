@@ -1,13 +1,17 @@
 package com.aghielaan22.label
 
-import java.util.concurrent.ConcurrentHashMap
+import org.schabi.newpipe.extractor.InfoItem
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
+import org.schabi.newpipe.extractor.channel.ChannelInfoItem
+import org.schabi.newpipe.extractor.playlist.PlaylistInfo
+import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.search.SearchInfo
 import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQueryHandlerFactory
-import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import org.schabi.newpipe.extractor.stream.StreamInfo
+import org.schabi.newpipe.extractor.stream.StreamInfoItem
+import java.util.concurrent.ConcurrentHashMap
 
 object MusicRepository {
 
@@ -15,29 +19,57 @@ object MusicRepository {
         NewPipe.init(AppDownloader())
     }
 
-    fun searchSongs(query: String): List<Song> {
-        val service = ServiceList.YouTube
-        val handler = service.searchQHFactory.fromQuery(
-            query,
-            listOf(YoutubeSearchQueryHandlerFactory.MUSIC_SONGS),
-            ""
-        )
-        val info = SearchInfo.getInfo(service, handler)
+    private val urlCache = ConcurrentHashMap<String, Pair<String, Long>>()
 
-        return info.relatedItems
-            .filterIsInstance<StreamInfoItem>()
-            .map { item ->
-                Song(
-                    id = item.url,
-                    title = item.name,
-                    artist = item.uploaderName ?: "Unknown artist",
-                    thumbnailUrl = item.thumbnails.maxByOrNull { it.height }?.url
+    // ---- Search ----
+
+    fun searchSongs(query: String): List<Song> =
+        searchStreams(query, YoutubeSearchQueryHandlerFactory.MUSIC_SONGS)
+
+    fun searchVideos(query: String): List<Song> =
+        searchStreams(query, YoutubeSearchQueryHandlerFactory.MUSIC_VIDEOS)
+
+    fun searchAlbums(query: String): List<Album> =
+        searchItems(query, YoutubeSearchQueryHandlerFactory.MUSIC_ALBUMS)
+            .filterIsInstance<PlaylistInfoItem>()
+            .map {
+                Album(
+                    id = it.url,
+                    title = it.name,
+                    artist = it.uploaderName ?: "",
+                    thumbnailUrl = bestThumbnail(it)
                 )
             }
             .distinctBy { it.id }
+
+    fun searchArtists(query: String): List<Artist> =
+        searchItems(query, YoutubeSearchQueryHandlerFactory.MUSIC_ARTISTS)
+            .filterIsInstance<ChannelInfoItem>()
+            .map { Artist(name = it.name, thumbnailUrl = bestThumbnail(it)) }
+            .distinctBy { it.name }
+
+    // ---- Pages ----
+
+    fun getAlbumTracks(albumId: String): List<Song> {
+        val info = PlaylistInfo.getInfo(ServiceList.YouTube, albumId)
+        return info.relatedItems
+            .map { toSong(it) }
+            .distinctBy { it.id }
     }
 
-    private val urlCache = ConcurrentHashMap<String, Pair<String, Long>>()
+    fun getArtistDetails(name: String): ArtistDetails {
+        fun credited(text: String) = text.contains(name, ignoreCase = true)
+
+        val songs = searchSongs(name).filter { credited(it.artist) }
+        val albums = try {
+            searchAlbums(name).filter { credited(it.artist) }
+        } catch (e: Exception) {
+            emptyList()
+        }
+        return ArtistDetails(songs, albums)
+    }
+
+    // ---- Playback ----
 
     fun getAudioUrl(videoUrl: String): String {
         val cached = urlCache[videoUrl]
@@ -55,4 +87,28 @@ object MusicRepository {
         urlCache[videoUrl] = best.content to now
         return best.content
     }
+
+    // ---- Helpers ----
+
+    private fun searchItems(query: String, filter: String): List<InfoItem> {
+        val service = ServiceList.YouTube
+        val handler = service.searchQHFactory.fromQuery(query, listOf(filter), "")
+        return SearchInfo.getInfo(service, handler).relatedItems
+    }
+
+    private fun searchStreams(query: String, filter: String): List<Song> =
+        searchItems(query, filter)
+            .filterIsInstance<StreamInfoItem>()
+            .map { toSong(it) }
+            .distinctBy { it.id }
+
+    private fun toSong(item: StreamInfoItem) = Song(
+        id = item.url,
+        title = item.name,
+        artist = item.uploaderName ?: "Unknown artist",
+        thumbnailUrl = bestThumbnail(item)
+    )
+
+    private fun bestThumbnail(item: InfoItem): String? =
+        item.thumbnails.maxByOrNull { it.height }?.url
 }
