@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 
 enum class Tab(val label: String, val icon: ImageVector) {
     Home("Home", Icons.Default.Home),
@@ -34,6 +35,17 @@ enum class Tab(val label: String, val icon: ImageVector) {
 fun LAbelApp() {
     var selectedTab by remember { mutableStateOf(Tab.Home) }
     var showPlayer by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var crashReport by remember { mutableStateOf(CrashReporter.pendingReport(context)) }
+    crashReport?.let { report ->
+        CrashReportDialog(
+            report = report,
+            onDismiss = {
+                CrashReporter.clear(context)
+                crashReport = null
+            }
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -75,6 +87,10 @@ fun LAbelApp() {
 
                     is DetailPage.ArtistPage -> Surface(modifier = Modifier.fillMaxSize()) {
                         ArtistScreen(page.artist, onBack = { Navigator.back() })
+                    }
+
+                    DetailPage.SettingsPage -> Surface(modifier = Modifier.fillMaxSize()) {
+                        SettingsScreen(onBack = { Navigator.back() })
                     }
 
                     null -> Unit

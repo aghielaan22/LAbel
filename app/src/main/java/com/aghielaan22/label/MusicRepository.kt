@@ -12,6 +12,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.abs
 
 object MusicRepository {
 
@@ -72,22 +73,33 @@ object MusicRepository {
     // ---- Playback ----
 
     fun getAudioUrl(videoUrl: String): String {
-        val cached = urlCache[videoUrl]
+        val quality = AppSettings.audioQuality
+        val cacheKey = "$videoUrl|${quality.name}"
+
+        val cached = urlCache[cacheKey]
         val now = System.currentTimeMillis()
         if (cached != null && now - cached.second < 5 * 60 * 60 * 1000L) {
             return cached.first
         }
 
         val info = StreamInfo.getInfo(ServiceList.YouTube, videoUrl)
-        val best = info.audioStreams
+        val streams = info.audioStreams
             .filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
-            .maxByOrNull { it.averageBitrate }
-            ?: throw IllegalStateException("No playable audio stream found")
 
-        urlCache[videoUrl] = best.content to now
-        return best.content
+        val chosen = when (quality) {
+            AudioQuality.High -> streams.maxByOrNull { it.averageBitrate }
+            AudioQuality.Standard -> streams
+                .filter { it.averageBitrate > 0 }
+                .minByOrNull { abs(it.averageBitrate - 128) }
+            AudioQuality.DataSaver -> streams
+                .filter { it.averageBitrate > 0 }
+                .minByOrNull { it.averageBitrate }
+        } ?: streams.firstOrNull()
+        ?: throw IllegalStateException("No playable audio stream found")
+
+        urlCache[cacheKey] = chosen.content to now
+        return chosen.content
     }
-
     // ---- Helpers ----
 
     private fun searchItems(query: String, filter: String): List<InfoItem> {

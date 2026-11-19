@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateListOf
 sealed interface DetailPage {
     data class AlbumPage(val album: Album) : DetailPage
     data class ArtistPage(val artist: Artist) : DetailPage
+    data object SettingsPage : DetailPage
 }
 
 object Navigator {

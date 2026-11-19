@@ -37,6 +37,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.fillMaxWidth
 
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier) {
@@ -51,11 +58,21 @@ fun HomeScreen(modifier: Modifier = Modifier) {
         contentPadding = PaddingValues(vertical = 16.dp)
     ) {
         item {
-            Text(
-                text = "Home",
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Home",
+                    style = MaterialTheme.typography.headlineMedium
+                )
+                IconButton(onClick = { Navigator.open(DetailPage.SettingsPage) }) {
+                    Icon(Icons.Default.Settings, contentDescription = "Settings")
+                }
+            }
         }
 
         if (HistoryRepository.recentSongs.isNotEmpty()) {

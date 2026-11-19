@@ -31,4 +31,9 @@ object HistoryRepository {
         }
         file?.writeText(recentSongs.toList().toJsonString())
     }
+
+    fun clear() {
+        recentSongs.clear()
+        file?.writeText("[]")
+    }
 }

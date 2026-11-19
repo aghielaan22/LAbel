@@ -54,6 +54,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import androidx.compose.material.icons.filled.Timer
 
 enum class PlayerPane { Artwork, Lyrics, Queue }
 
@@ -68,6 +69,7 @@ fun NowPlayingContent(onClose: () -> Unit) {
     var sliderValue by remember { mutableFloatStateOf(0f) }
     var pane by remember { mutableStateOf(PlayerPane.Artwork) }
     var lyrics by remember { mutableStateOf<List<LyricLine>?>(null) }
+    var optionsOpen by remember { mutableStateOf(false) }
 
     // Keeps position and duration up to date
     LaunchedEffect(Unit) {
@@ -99,6 +101,10 @@ fun NowPlayingContent(onClose: () -> Unit) {
         }
     }
 
+    if (optionsOpen) {
+        PlaybackOptionsSheet(onDismiss = { optionsOpen = false })
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = Color.Transparent,
@@ -120,6 +126,14 @@ fun NowPlayingContent(onClose: () -> Unit) {
                     Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close player")
                 }
                 Row {
+                    IconButton(onClick = { optionsOpen = true }) {
+                        Icon(
+                            Icons.Default.Timer,
+                            contentDescription = "Sleep timer and fades",
+                            tint = if (SleepTimer.isActive) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     TextButton(
                         onClick = {
                             pane = if (pane == PlayerPane.Queue) PlayerPane.Artwork
