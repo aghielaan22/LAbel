@@ -108,7 +108,7 @@ fun SearchScreen(modifier: Modifier = Modifier) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error = e.message ?: "Something went wrong"
+                error = friendlyMessage(e)
             }
             artists = loadQuietly { MusicRepository.searchArtists(q) } ?: emptyList()
             albums = loadQuietly { MusicRepository.searchAlbums(q) } ?: emptyList()
@@ -214,7 +214,12 @@ private fun SearchResults(
 
     fun play(list: List<Song>, index: Int) {
         SearchHistoryRepository.add(query)
-        PlayerController.playQueue(list, index)
+        if (AppSettings.autoplay) {
+            // Start with just this song, and let autoplay add similar ones
+            PlayerController.playQueue(listOf(list[index]), 0)
+        } else {
+            PlayerController.playQueue(list, index)
+        }
     }
 
     LazyColumn {

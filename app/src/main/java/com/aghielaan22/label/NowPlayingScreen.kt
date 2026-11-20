@@ -55,6 +55,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.foundation.layout.BoxWithConstraints
 
 enum class PlayerPane { Artwork, Lyrics, Queue }
 
@@ -160,10 +161,10 @@ fun NowPlayingContent(onClose: () -> Unit) {
             }
             Spacer(Modifier.height(16.dp))
 
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1f),
+                    .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
                 when (pane) {
@@ -184,7 +185,7 @@ fun NowPlayingContent(onClose: () -> Unit) {
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
-                            .fillMaxSize()
+                            .size(minOf(maxWidth, maxHeight))
                             .clip(RoundedCornerShape(16.dp))
                     )
                 }

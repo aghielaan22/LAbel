@@ -58,4 +58,16 @@ object LibraryRepository {
         }
         file?.writeText(array.toString())
     }
+    /** Adds songs that aren't already liked. Returns how many were new. */
+    fun importSongs(songs: List<Song>): Int {
+        var added = 0
+        songs.forEach { song ->
+            if (likedSongs.none { it.id == song.id }) {
+                likedSongs.add(song)
+                added++
+            }
+        }
+        if (added > 0) save()
+        return added
+    }
 }

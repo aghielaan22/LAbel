@@ -50,7 +50,7 @@ fun AlbumScreen(album: Album, onBack: () -> Unit) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            error = e.message ?: "Couldn't load this album"
+            error = friendlyMessage(e)
         }
     }
 
@@ -136,7 +136,7 @@ fun ArtistScreen(artist: Artist, onBack: () -> Unit) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            error = e.message ?: "Couldn't load this artist"
+            error = friendlyMessage(e)
         }
     }
 

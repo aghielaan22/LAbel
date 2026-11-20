@@ -23,6 +23,7 @@ object AppSettings {
     private const val PREFS_NAME = "label_settings"
     private const val KEY_THEME = "theme_mode"
     private const val KEY_QUALITY = "audio_quality"
+    private const val KEY_AUTOPLAY = "autoplay"
 
     private var prefs: SharedPreferences? = null
 
@@ -30,6 +31,9 @@ object AppSettings {
         private set
 
     var audioQuality by mutableStateOf(AudioQuality.High)
+        private set
+
+    var autoplay by mutableStateOf(true)
         private set
 
     fun init(context: Context) {
@@ -40,6 +44,7 @@ object AppSettings {
             ?: ThemeMode.System
         audioQuality = AudioQuality.entries.firstOrNull { it.name == p.getString(KEY_QUALITY, null) }
             ?: AudioQuality.High
+        autoplay = p.getBoolean(KEY_AUTOPLAY, true)
     }
 
     fun updateThemeMode(mode: ThemeMode) {
@@ -50,5 +55,10 @@ object AppSettings {
     fun updateAudioQuality(quality: AudioQuality) {
         audioQuality = quality
         prefs?.edit()?.putString(KEY_QUALITY, quality.name)?.apply()
+    }
+
+    fun updateAutoplay(enabled: Boolean) {
+        autoplay = enabled
+        prefs?.edit()?.putBoolean(KEY_AUTOPLAY, enabled)?.apply()
     }
 }

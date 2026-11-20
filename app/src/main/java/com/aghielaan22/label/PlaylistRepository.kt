@@ -84,4 +84,24 @@ object PlaylistRepository {
         }
         file?.writeText(array.toString())
     }
+    /** Merges playlists in by ID. Returns how many were added or changed. */
+    fun importPlaylists(incoming: List<Playlist>): Int {
+        var changes = 0
+        incoming.forEach { playlist ->
+            val index = playlists.indexOfFirst { it.id == playlist.id }
+            if (index < 0) {
+                playlists.add(playlist)
+                changes++
+            } else {
+                val existing = playlists[index]
+                val missing = playlist.songs.filter { s -> existing.songs.none { it.id == s.id } }
+                if (missing.isNotEmpty()) {
+                    playlists[index] = existing.copy(songs = existing.songs + missing)
+                    changes++
+                }
+            }
+        }
+        if (changes > 0) save()
+        return changes
+    }
 }

@@ -3,6 +3,7 @@ package com.aghielaan22.label
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -20,10 +21,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 
 enum class Tab(val label: String, val icon: ImageVector) {
     Home("Home", Icons.Default.Home),
@@ -35,6 +37,7 @@ enum class Tab(val label: String, val icon: ImageVector) {
 fun LAbelApp() {
     var selectedTab by remember { mutableStateOf(Tab.Home) }
     var showPlayer by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
     var crashReport by remember { mutableStateOf(CrashReporter.pendingReport(context)) }
     crashReport?.let { report ->
@@ -58,7 +61,7 @@ fun LAbelApp() {
                                 selected = selectedTab == tab,
                                 onClick = {
                                     selectedTab = tab
-                                    Navigator.clear() // leave any open album or artist page
+                                    Navigator.clear()
                                 },
                                 icon = { Icon(tab.icon, contentDescription = tab.label) },
                                 label = { Text(tab.label) }
@@ -68,32 +71,41 @@ fun LAbelApp() {
                 }
             }
         ) { innerPadding ->
-            Box(
+            Column(
                 modifier = Modifier
                     .padding(innerPadding)
                     .fillMaxSize()
             ) {
-                when (selectedTab) {
-                    Tab.Home -> HomeScreen()
-                    Tab.Search -> SearchScreen()
-                    Tab.Library -> LibraryScreen()
+                if (!NetworkMonitor.isOnline) {
+                    OfflineBanner()
                 }
 
-                // Album and artist pages are drawn over the current tab
-                when (val page = Navigator.current) {
-                    is DetailPage.AlbumPage -> Surface(modifier = Modifier.fillMaxSize()) {
-                        AlbumScreen(page.album, onBack = { Navigator.back() })
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    when (selectedTab) {
+                        Tab.Home -> HomeScreen()
+                        Tab.Search -> SearchScreen()
+                        Tab.Library -> LibraryScreen()
                     }
 
-                    is DetailPage.ArtistPage -> Surface(modifier = Modifier.fillMaxSize()) {
-                        ArtistScreen(page.artist, onBack = { Navigator.back() })
-                    }
+                    when (val page = Navigator.current) {
+                        is DetailPage.AlbumPage -> Surface(modifier = Modifier.fillMaxSize()) {
+                            AlbumScreen(page.album, onBack = { Navigator.back() })
+                        }
 
-                    DetailPage.SettingsPage -> Surface(modifier = Modifier.fillMaxSize()) {
-                        SettingsScreen(onBack = { Navigator.back() })
-                    }
+                        is DetailPage.ArtistPage -> Surface(modifier = Modifier.fillMaxSize()) {
+                            ArtistScreen(page.artist, onBack = { Navigator.back() })
+                        }
 
-                    null -> Unit
+                        DetailPage.SettingsPage -> Surface(modifier = Modifier.fillMaxSize()) {
+                            SettingsScreen(onBack = { Navigator.back() })
+                        }
+
+                        null -> Unit
+                    }
                 }
             }
         }
@@ -105,11 +117,16 @@ fun LAbelApp() {
 }
 
 @Composable
-fun PlaceholderScreen(title: String, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text = title, style = MaterialTheme.typography.headlineMedium)
+private fun OfflineBanner() {
+    Surface(color = MaterialTheme.colorScheme.errorContainer) {
+        Text(
+            text = "You're offline. Search and new songs need an internet connection.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp)
+        )
     }
 }

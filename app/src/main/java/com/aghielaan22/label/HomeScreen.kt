@@ -44,6 +44,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material.icons.filled.Refresh
 
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier) {
@@ -69,6 +70,12 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                     text = "Home",
                     style = MaterialTheme.typography.headlineMedium
                 )
+                IconButton(
+                    onClick = { scope.launch { HomeRepository.loadIfNeeded(force = true) } },
+                    enabled = !HomeRepository.isLoading
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Refresh recommendations")
+                }
                 IconButton(onClick = { Navigator.open(DetailPage.SettingsPage) }) {
                     Icon(Icons.Default.Settings, contentDescription = "Settings")
                 }

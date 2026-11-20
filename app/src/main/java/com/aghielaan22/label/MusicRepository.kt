@@ -13,6 +13,7 @@ import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
+import android.net.Uri
 
 object MusicRepository {
 
@@ -68,6 +69,23 @@ object MusicRepository {
             emptyList()
         }
         return ArtistDetails(songs, albums)
+    }
+
+    /** Songs similar to [song], taken from YouTube's Mix for that song. */
+    fun getRadio(song: Song): List<Song> {
+        val videoId = Uri.parse(song.id).getQueryParameter("v") ?: return emptyList()
+        val mixUrl = "https://www.youtube.com/watch?v=$videoId&list=RD$videoId"
+        val info = PlaylistInfo.getInfo(ServiceList.YouTube, mixUrl)
+
+        return info.relatedItems
+            .map { item ->
+                // Mix links can carry extra list information, so keep just the video address
+                val id = Uri.parse(item.url).getQueryParameter("v")
+                    ?.let { "https://www.youtube.com/watch?v=$it" } ?: item.url
+                toSong(item).copy(id = id)
+            }
+            .filter { it.id != song.id }
+            .distinctBy { it.id }
     }
 
     // ---- Playback ----

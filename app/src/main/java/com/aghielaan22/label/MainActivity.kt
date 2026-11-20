@@ -34,6 +34,7 @@ class MainActivity : ComponentActivity() {
         SearchHistoryRepository.init(this)
         PlaybackSettings.init(this)
         AppSettings.init(this)
+        NetworkMonitor.start(this)
         if (Build.VERSION.SDK_INT >= 33) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }

@@ -14,11 +14,22 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 object PlayerController {
 
     private var controller: MediaController? = null
     private var connecting = false
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var radioJob: Job? = null
+    private var radioSeedId: String? = null
 
     var queueSongs by mutableStateOf<List<Song>>(emptyList())
         private set
@@ -50,7 +61,13 @@ object PlayerController {
             val index = controller?.currentMediaItemIndex ?: 0
             currentIndex = index
             currentSong = if (mediaItem == null) null else queueSongs.getOrNull(index)
-            currentSong?.let { HistoryRepository.add(it) }
+            currentSong?.let { song ->
+                HistoryRepository.add(song)
+                // Nearly out of songs? Line up similar ones.
+                if (AppSettings.autoplay && index >= queueSongs.size - 1) {
+                    loadRadio(song)
+                }
+            }
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
@@ -62,7 +79,7 @@ object PlayerController {
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            errorMessage = "Playback failed: ${error.errorCodeName}"
+            errorMessage = friendlyPlaybackMessage(error)
             // If one song can't play, skip on to the next one
             controller?.let {
                 if (it.hasNextMediaItem()) {
@@ -100,12 +117,44 @@ object PlayerController {
             return
         }
         errorMessage = null
+        radioJob?.cancel()
+        radioSeedId = null
         queueSongs = songs
         currentIndex = startIndex
         currentSong = songs.getOrNull(startIndex)
         c.setMediaItems(songs.map { it.toMediaItem() }, startIndex, 0L)
         c.prepare()
         c.play()
+    }
+
+    /**
+     * Fetches songs similar to [seed] and adds them to the end of the queue,
+     * as long as the queue still ends with [seed] when they arrive.
+     */
+    private fun loadRadio(seed: Song) {
+        if (radioSeedId == seed.id) return
+        radioSeedId = seed.id
+        radioJob?.cancel()
+        radioJob = scope.launch {
+            val similar = try {
+                withContext(Dispatchers.IO) { MusicRepository.getRadio(seed) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                radioSeedId = null // allow another try later
+                return@launch
+            }
+
+            val c = controller ?: return@launch
+            if (queueSongs.lastOrNull()?.id != seed.id) return@launch // the user moved on
+
+            val alreadyQueued = queueSongs.map { it.id }.toSet()
+            val fresh = similar.filter { it.id !in alreadyQueued }.take(30)
+            if (fresh.isEmpty()) return@launch
+
+            queueSongs = queueSongs + fresh
+            c.addMediaItems(fresh.map { it.toMediaItem() })
+        }
     }
 
     /** Jumps to the song at [index] in the current queue. */
@@ -128,7 +177,7 @@ object PlayerController {
     fun playNext(song: Song) {
         val c = controller
         if (c == null || queueSongs.isEmpty()) {
-            playQueue(listOf(song), 0)   // nothing queued yet, so just start it
+            playQueue(listOf(song), 0)
             return
         }
         val insertAt = c.currentMediaItemIndex + 1

@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.Switch
 
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
@@ -83,6 +84,20 @@ fun SettingsScreen(onBack: () -> Unit) {
                 headlineContent = { Text("Clear recently played") },
                 supportingContent = { Text("${HistoryRepository.recentSongs.size} saved") }
             )
+            ListItem(
+                headlineContent = { Text("Autoplay similar songs") },
+                supportingContent = {
+                    Text("When the queue is about to run out, keep playing songs similar to the last one.")
+                },
+                trailingContent = {
+                    Switch(
+                        checked = AppSettings.autoplay,
+                        onCheckedChange = { AppSettings.updateAutoplay(it) }
+                    )
+                }
+            )
+
+            BackupSection()
 
             SectionHeader("About")
             ListItem(
