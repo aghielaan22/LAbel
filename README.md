@@ -34,13 +34,11 @@
 
 ---
 
-<!--
 ## 📸 Screenshots
 
 | Home | Search | Now Playing | Lyrics |
 |:---:|:---:|:---:|:---:|
 | <img src="docs/screenshots/home.png" width="200"> | <img src="docs/screenshots/search.png" width="200"> | <img src="docs/screenshots/player.png" width="200"> | <img src="docs/screenshots/lyrics.png" width="200"> |
--->
 
 ## ✨ Features
 
