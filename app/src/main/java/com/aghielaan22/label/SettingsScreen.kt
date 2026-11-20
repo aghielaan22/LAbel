@@ -58,6 +58,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 options = ThemeMode.entries.map { it to it.label },
                 selected = AppSettings.themeMode
             ) { AppSettings.updateThemeMode(it) }
+            ThemePicker()
 
             SectionHeader("Playback")
             ChoiceSetting(

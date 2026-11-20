@@ -1,11 +1,13 @@
 package com.aghielaan22.label
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -15,97 +17,106 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.ui.Alignment
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.icons.filled.Refresh
+import java.time.LocalTime
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
+    var started by remember { mutableStateOf(false) }
+
+    val greeting = remember {
+        when (LocalTime.now().hour) {
+            in 5..11 -> "Good morning"
+            in 12..16 -> "Good afternoon"
+            in 17..21 -> "Good evening"
+            else -> "Good night"
+        }
+    }
 
     LaunchedEffect(Unit) {
+        started = true
         HomeRepository.loadIfNeeded()
     }
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 16.dp)
+    PullToRefreshBox(
+        isRefreshing = HomeRepository.isLoading,
+        onRefresh = { scope.launch { HomeRepository.loadIfNeeded(force = true) } },
+        modifier = modifier.fillMaxSize()
     ) {
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Home",
-                    style = MaterialTheme.typography.headlineMedium
-                )
-                IconButton(
-                    onClick = { scope.launch { HomeRepository.loadIfNeeded(force = true) } },
-                    enabled = !HomeRepository.isLoading
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh recommendations")
-                }
-                IconButton(onClick = { Navigator.open(DetailPage.SettingsPage) }) {
-                    Icon(Icons.Default.Settings, contentDescription = "Settings")
-                }
-            }
-        }
-
-        if (HistoryRepository.recentSongs.isNotEmpty()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(vertical = 16.dp)
+        ) {
             item {
-                SongShelf("Recently played", HistoryRepository.recentSongs.toList())
-            }
-        }
-
-        items(HomeRepository.sections, key = { it.title }) { section ->
-            SongShelf(section.title, section.songs)
-        }
-
-        item {
-            if (HomeRepository.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.padding(16.dp))
-            } else if (HomeRepository.sections.isEmpty()) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = "Couldn't load recommendations.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = greeting,
+                        style = MaterialTheme.typography.headlineMedium
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = {
-                        scope.launch { HomeRepository.loadIfNeeded(force = true) }
-                    }) {
-                        Text("Try again")
+                    IconButton(onClick = { Navigator.open(DetailPage.SettingsPage) }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    }
+                }
+            }
+
+            if (HistoryRepository.recentSongs.isNotEmpty()) {
+                item(key = "recent") {
+                    SongShelf("Recently played", HistoryRepository.recentSongs.toList())
+                }
+            }
+
+            items(HomeRepository.sections, key = { it.title }) { section ->
+                SongShelf(section.title, section.songs, Modifier.animateItem())
+            }
+
+            if (HomeRepository.isLoading && HomeRepository.sections.isEmpty()) {
+                items(2) { SkeletonShelf() }
+            } else if (started && !HomeRepository.isLoading && HomeRepository.sections.isEmpty()) {
+                item {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Couldn't load recommendations. Pull down to try again.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = {
+                            scope.launch { HomeRepository.loadIfNeeded(force = true) }
+                        }) {
+                            Text("Try again")
+                        }
                     }
                 }
             }
@@ -114,11 +125,13 @@ fun HomeScreen(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun SongShelf(title: String, songs: List<Song>) {
-    Column(modifier = Modifier.padding(top = 24.dp)) {
+fun SongShelf(title: String, songs: List<Song>, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.padding(top = 24.dp)) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
         )
         LazyRow(
@@ -134,7 +147,6 @@ fun SongShelf(title: String, songs: List<Song>) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SongCard(song: Song, onClick: () -> Unit) {
     val haptics = LocalHapticFeedback.current
@@ -143,12 +155,12 @@ fun SongCard(song: Song, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .width(140.dp)
-            .combinedClickable(
-                onClick = onClick,
+            .bouncyClickable(
                 onLongClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     sheetOpen = true
-                }
+                },
+                onClick = onClick
             )
     ) {
         AsyncImage(
@@ -177,5 +189,39 @@ fun SongCard(song: Song, onClick: () -> Unit) {
 
     if (sheetOpen) {
         SongOptionsSheet(song = song, onDismiss = { sheetOpen = false })
+    }
+}
+
+@Composable
+private fun SkeletonShelf() {
+    Column(modifier = Modifier.padding(top = 24.dp)) {
+        Box(
+            modifier = Modifier
+                .padding(start = 16.dp, bottom = 12.dp)
+                .size(width = 160.dp, height = 22.dp)
+                .shimmer(RoundedCornerShape(6.dp))
+        )
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            repeat(3) {
+                Column(modifier = Modifier.width(140.dp)) {
+                    Box(modifier = Modifier.size(140.dp).shimmer())
+                    Spacer(Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(width = 110.dp, height = 14.dp)
+                            .shimmer(RoundedCornerShape(4.dp))
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(width = 70.dp, height = 12.dp)
+                            .shimmer(RoundedCornerShape(4.dp))
+                    )
+                }
+            }
+        }
     }
 }

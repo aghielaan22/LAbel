@@ -180,13 +180,9 @@ fun NowPlayingContent(onClose: () -> Unit) {
 
                     PlayerPane.Queue -> QueueView(modifier = Modifier.fillMaxSize())
 
-                    PlayerPane.Artwork -> AsyncImage(
-                        model = song?.artworkUrl(1200),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(minOf(maxWidth, maxHeight))
-                            .clip(RoundedCornerShape(16.dp))
+                    PlayerPane.Artwork -> GestureArtwork(
+                        song = song,
+                        size = minOf(maxWidth, maxHeight)
                     )
                 }
             }
@@ -280,10 +276,8 @@ fun NowPlayingContent(onClose: () -> Unit) {
                     onClick = { PlayerController.togglePlayPause() },
                     modifier = Modifier.size(72.dp)
                 ) {
-                    Icon(
-                        imageVector = if (PlayerController.isPlaying)
-                            Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = "Play or pause",
+                    PlayPauseIcon(
+                        isPlaying = PlayerController.isPlaying,
                         modifier = Modifier.size(48.dp)
                     )
                 }

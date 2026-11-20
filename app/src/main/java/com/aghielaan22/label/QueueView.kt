@@ -1,7 +1,10 @@
 package com.aghielaan22.label
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,14 +13,20 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -25,6 +34,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QueueView(modifier: Modifier = Modifier) {
     val songs = PlayerController.queueSongs
@@ -49,36 +59,69 @@ fun QueueView(modifier: Modifier = Modifier) {
         }
 
         LazyColumn(state = listState) {
-            itemsIndexed(songs) { index, song ->
+            itemsIndexed(songs, key = { index, song -> "$index:${song.id}" }) { index, song ->
                 val isCurrent = index == current
-                ListItem(
-                    modifier = Modifier.clickable { PlayerController.playQueueIndex(index) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    leadingContent = {
-                        AsyncImage(
-                            model = song.thumbnailUrl,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                        )
-                    },
-                    headlineContent = {
-                        Text(
-                            text = song.title,
-                            maxLines = 1,
-                            color = if (isCurrent) MaterialTheme.colorScheme.primary
-                            else Color.Unspecified
-                        )
-                    },
-                    supportingContent = { Text(song.artist, maxLines = 1) },
-                    trailingContent = {
-                        IconButton(onClick = { PlayerController.removeFromQueue(index) }) {
-                            Icon(Icons.Default.Close, contentDescription = "Remove from queue")
+                val swipeState = rememberSwipeToDismissBoxState(
+                    confirmValueChange = { value ->
+                        if (value == SwipeToDismissBoxValue.EndToStart) {
+                            PlayerController.removeFromQueue(index)
+                            true
+                        } else {
+                            false
                         }
                     }
                 )
+
+                SwipeToDismissBox(
+                    state = swipeState,
+                    enableDismissFromStartToEnd = false,
+                    backgroundContent = {
+                        if (swipeState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.errorContainer)
+                                    .padding(horizontal = 20.dp),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Remove",
+                                    tint = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                    }
+                ) {
+                    ListItem(
+                        modifier = Modifier.clickable { PlayerController.playQueueIndex(index) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        leadingContent = {
+                            AsyncImage(
+                                model = song.artworkUrl(128),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                            )
+                        },
+                        headlineContent = {
+                            Text(
+                                text = song.title,
+                                maxLines = 1,
+                                color = if (isCurrent) MaterialTheme.colorScheme.primary
+                                else Color.Unspecified
+                            )
+                        },
+                        supportingContent = { Text(song.artist, maxLines = 1) },
+                        trailingContent = {
+                            IconButton(onClick = { PlayerController.removeFromQueue(index) }) {
+                                Icon(Icons.Default.Close, contentDescription = "Remove from queue")
+                            }
+                        }
+                    )
+                }
             }
         }
     }

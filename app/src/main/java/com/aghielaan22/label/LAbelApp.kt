@@ -1,5 +1,18 @@
 package com.aghielaan22.label
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -76,7 +89,11 @@ fun LAbelApp() {
                     .padding(innerPadding)
                     .fillMaxSize()
             ) {
-                if (!NetworkMonitor.isOnline) {
+                AnimatedVisibility(
+                    visible = !NetworkMonitor.isOnline,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
                     OfflineBanner()
                 }
 
@@ -85,32 +102,51 @@ fun LAbelApp() {
                         .weight(1f)
                         .fillMaxWidth()
                 ) {
-                    when (selectedTab) {
-                        Tab.Home -> HomeScreen()
-                        Tab.Search -> SearchScreen()
-                        Tab.Library -> LibraryScreen()
+                    Crossfade(
+                        targetState = selectedTab,
+                        animationSpec = tween(250),
+                        label = "tabs"
+                    ) { tab ->
+                        when (tab) {
+                            Tab.Home -> HomeScreen()
+                            Tab.Search -> SearchScreen()
+                            Tab.Library -> LibraryScreen()
+                        }
                     }
 
-                    when (val page = Navigator.current) {
-                        is DetailPage.AlbumPage -> Surface(modifier = Modifier.fillMaxSize()) {
-                            AlbumScreen(page.album, onBack = { Navigator.back() })
-                        }
+                    AnimatedContent(
+                        targetState = Navigator.current,
+                        transitionSpec = {
+                            (slideInHorizontally(tween(280)) { it / 3 } + fadeIn(tween(280))) togetherWith
+                                    (slideOutHorizontally(tween(220)) { it / 3 } + fadeOut(tween(220)))
+                        },
+                        label = "pages"
+                    ) { page ->
+                        when (page) {
+                            is DetailPage.AlbumPage -> Surface(modifier = Modifier.fillMaxSize()) {
+                                AlbumScreen(page.album, onBack = { Navigator.back() })
+                            }
 
-                        is DetailPage.ArtistPage -> Surface(modifier = Modifier.fillMaxSize()) {
-                            ArtistScreen(page.artist, onBack = { Navigator.back() })
-                        }
+                            is DetailPage.ArtistPage -> Surface(modifier = Modifier.fillMaxSize()) {
+                                ArtistScreen(page.artist, onBack = { Navigator.back() })
+                            }
 
-                        DetailPage.SettingsPage -> Surface(modifier = Modifier.fillMaxSize()) {
-                            SettingsScreen(onBack = { Navigator.back() })
-                        }
+                            DetailPage.SettingsPage -> Surface(modifier = Modifier.fillMaxSize()) {
+                                SettingsScreen(onBack = { Navigator.back() })
+                            }
 
-                        null -> Unit
+                            null -> Unit
+                        }
                     }
                 }
             }
         }
 
-        if (showPlayer && PlayerController.currentSong != null) {
+        AnimatedVisibility(
+            visible = showPlayer && PlayerController.currentSong != null,
+            enter = slideInVertically(tween(380)) { it } + fadeIn(tween(250)),
+            exit = slideOutVertically(tween(320)) { it } + fadeOut(tween(220))
+        ) {
             NowPlayingScreen(onClose = { showPlayer = false })
         }
     }

@@ -32,7 +32,7 @@ fun AlbumCard(album: Album) {
     Column(
         modifier = Modifier
             .width(140.dp)
-            .clickable { Navigator.open(DetailPage.AlbumPage(album)) }
+            .bouncyClickable { Navigator.open(DetailPage.AlbumPage(album)) }
     ) {
         AsyncImage(
             model = album.artworkUrl(512),

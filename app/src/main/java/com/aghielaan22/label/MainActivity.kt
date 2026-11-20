@@ -39,7 +39,8 @@ class MainActivity : ComponentActivity() {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         setContent {
-            val dark = when (AppSettings.themeMode) {
+            val theme = AppSettings.appTheme
+            val dark = theme.amoled || when (AppSettings.themeMode) {
                 ThemeMode.System -> isSystemInDarkTheme()
                 ThemeMode.Light -> false
                 ThemeMode.Dark -> true
@@ -53,7 +54,7 @@ class MainActivity : ComponentActivity() {
                 insets.isAppearanceLightNavigationBars = !dark
             }
 
-            LAbelTheme(darkTheme = dark) {
+            LAbelAppTheme(darkTheme = dark) {
                 LAbelApp()
             }
         }

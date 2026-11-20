@@ -72,6 +72,7 @@ fun NowPlayingScreen(onClose: () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .dragDownToDismiss(onDismiss = onClose)
                 .background(Brush.verticalGradient(listOf(background, Color.Black)))
         ) {
             NowPlayingContent(onClose)
