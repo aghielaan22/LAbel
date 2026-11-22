@@ -275,5 +275,5 @@ LAbel stands on the shoulders of excellent open-source work:
 LAbel is released under the **GNU General Public License v3.0**, because it builds on NewPipeExtractor, which uses the same license. See [`LICENSE`](LICENSE) for the full text.
 
 <p align="center">
-  Made by <b><AghielaanSaravanan></b> · Contributions and ideas are welcome 🎵
+  Made by <b>Aghielaan Saravanan</b> · Contributions and ideas are welcome 🎵
 </p>
