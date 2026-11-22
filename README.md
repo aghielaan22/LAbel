@@ -96,7 +96,7 @@
 
 ## 📲 Install
 
-1. Go to the [**Releases**](https://github.com/<aghielaan22>/LAbel/releases) page and download the latest `LAbel-*.apk`.
+1. Go to the [**Releases**](https://github.com/aghielaan22/LAbel/releases) page and download the latest `LAbel-*.apk`.
 2. Open the file on your phone. Android will ask you to allow installs from that source (your browser or file manager). Allow it.
 3. If **Google Play Protect** warns about an "unrecognized app", that's normal for any app installed outside the Play Store. Choose **Install anyway**.
 4. Open LAbel and search for something.
@@ -114,7 +114,7 @@
 **You'll need:** the latest stable [Android Studio](https://developer.android.com/studio) and an Android device (a real phone is best) or an emulator. No API keys or accounts are required.
 
 ```bash
-git clone https://github.com/<aghielaan22>/LAbel.git
+git clone https://github.com/aghielaan22/LAbel.git
 ```
 
 1. Open the `LAbel` folder in Android Studio and let Gradle sync.
