@@ -31,7 +31,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,13 +41,11 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import kotlinx.coroutines.launch
 import java.time.LocalTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier) {
-    val scope = rememberCoroutineScope()
     var started by remember { mutableStateOf(false) }
 
     val greeting = remember {
@@ -62,12 +59,12 @@ fun HomeScreen(modifier: Modifier = Modifier) {
 
     LaunchedEffect(Unit) {
         started = true
-        HomeRepository.loadIfNeeded()
+        HomeRepository.requestLoad()
     }
 
     PullToRefreshBox(
         isRefreshing = HomeRepository.isLoading,
-        onRefresh = { scope.launch { HomeRepository.loadIfNeeded(force = true) } },
+        onRefresh = { HomeRepository.requestLoad(force = true) },
         modifier = modifier.fillMaxSize()
     ) {
         LazyColumn(
@@ -113,7 +110,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                         )
                         Spacer(Modifier.height(8.dp))
                         Button(onClick = {
-                            scope.launch { HomeRepository.loadIfNeeded(force = true) }
+                            HomeRepository.requestLoad(force = true)
                         }) {
                             Text("Try again")
                         }
@@ -163,13 +160,11 @@ fun SongCard(song: Song, onClick: () -> Unit) {
                 onClick = onClick
             )
     ) {
-        AsyncImage(
-            model = song.artworkUrl(512),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(140.dp)
-                .clip(RoundedCornerShape(12.dp))
+        Artwork(
+            url = song.artworkUrl(512),
+            fallbackUrl = song.thumbnailUrl,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.size(140.dp)
         )
         Spacer(Modifier.height(8.dp))
         Text(

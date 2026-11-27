@@ -58,6 +58,11 @@ fun NamePlaylistDialog(
 
 @Composable
 fun AddToPlaylistDialog(song: Song, onDismiss: () -> Unit) {
+    AddToPlaylistDialog(listOf(song), onDismiss = onDismiss)
+}
+
+@Composable
+internal fun AddToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit, onAdded: () -> Unit = {}) {
     val context = LocalContext.current
     var creating by remember { mutableStateOf(false) }
 
@@ -66,9 +71,9 @@ fun AddToPlaylistDialog(song: Song, onDismiss: () -> Unit) {
             title = "New playlist",
             confirmLabel = "Create",
             onConfirm = { name ->
-                val playlist = PlaylistRepository.create(name)
-                PlaylistRepository.addSong(playlist.id, song)
+                val playlist = PlaylistRepository.createWithSongs(name, songs)
                 Toast.makeText(context, "Added to ${playlist.name}", Toast.LENGTH_SHORT).show()
+                onAdded()
                 onDismiss()
             },
             onDismiss = { creating = false }
@@ -86,10 +91,14 @@ fun AddToPlaylistDialog(song: Song, onDismiss: () -> Unit) {
                     items(PlaylistRepository.playlists, key = { it.id }) { playlist ->
                         ListItem(
                             modifier = Modifier.clickable {
-                                val added = PlaylistRepository.addSong(playlist.id, song)
-                                val message = if (added) "Added to ${playlist.name}"
-                                else "Already in ${playlist.name}"
+                                val added = PlaylistRepository.addSongs(playlist.id, songs)
+                                val message = when {
+                                    added == 0 -> "Already in ${playlist.name}"
+                                    songs.size == 1 -> "Added to ${playlist.name}"
+                                    else -> "Added ${songCountText(added)} to ${playlist.name}"
+                                }
                                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                onAdded()
                                 onDismiss()
                             },
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent),

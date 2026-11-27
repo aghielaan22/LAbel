@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_label_name">LAbel Now Playing</string>
+    <string name="widget_label_empty">LAbel</string>
+    <string name="widget_label_open">Open to choose a song</string>
+    <string name="widget_label_play">Play</string>
+    <string name="widget_label_pause">Pause</string>
+    <string name="widget_label_next">Next track</string>
+    <string name="widget_label_studio">Host controls playback</string>
+</resources>

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_label_background"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="16dp"
+    android:paddingEnd="8dp">
+
+    <LinearLayout
+        android:id="@+id/widget_track"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="vertical"
+        android:paddingEnd="4dp">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/widget_label_empty"
+            android:textColor="#F9F3FF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_artist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/widget_label_open"
+            android:textColor="#CEC2EE"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/widget_play_pause"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="@drawable/widget_label_button"
+        android:contentDescription="@string/widget_label_play"
+        android:padding="12dp"
+        android:scaleType="centerInside"
+        android:src="@drawable/widget_label_play" />
+
+    <ImageView
+        android:id="@+id/widget_next"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:contentDescription="@string/widget_label_next"
+        android:padding="12dp"
+        android:scaleType="centerInside"
+        android:src="@drawable/widget_label_next" />
+</LinearLayout>

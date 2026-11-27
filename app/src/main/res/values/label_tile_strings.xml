@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_label_open">Open app</string>
+    <string name="tile_label_studio">Studio session</string>
+    <string name="tile_label_accessibility">%1$s, %2$s</string>
+</resources>

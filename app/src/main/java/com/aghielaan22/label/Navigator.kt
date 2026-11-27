@@ -6,6 +6,9 @@ sealed interface DetailPage {
     data class AlbumPage(val album: Album) : DetailPage
     data class ArtistPage(val artist: Artist) : DetailPage
     data object SettingsPage : DetailPage
+    data object SoundPage : DetailPage
+    data object StatsPage : DetailPage
+    data object ImportPage : DetailPage
 }
 
 object Navigator {

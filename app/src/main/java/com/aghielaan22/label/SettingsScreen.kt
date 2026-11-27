@@ -3,7 +3,6 @@ package com.aghielaan22.label
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,9 +14,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,9 +26,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.Switch
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
@@ -38,6 +39,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     var confirmClearSearches by remember { mutableStateOf(false) }
     var confirmClearPlays by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
+    val transparent = ListItemDefaults.colors(containerColor = Color.Transparent)
 
     val version = remember {
         try {
@@ -50,66 +52,145 @@ fun SettingsScreen(onBack: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
         PageHeader(title = "Settings", onBack = onBack)
 
-        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-            SectionHeader("Appearance")
-            ChoiceSetting(
-                title = "Theme",
-                description = null,
-                options = ThemeMode.entries.map { it to it.label },
-                selected = AppSettings.themeMode
-            ) { AppSettings.updateThemeMode(it) }
-            ThemePicker()
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+        ) {
+            SettingsGroup("Appearance") {
+                ChoiceSetting(
+                    title = "Brightness",
+                    description = null,
+                    options = ThemeMode.entries.map { it to it.label },
+                    selected = AppSettings.themeMode
+                ) { AppSettings.updateThemeMode(it) }
+                ThemePicker()
+                SwitchRow(
+                    title = "Music-reactive glow",
+                    description = "Bass gently pulses behind the artwork in Now Playing.",
+                    checked = AppSettings.musicReactiveGlow
+                ) { AppSettings.updateMusicReactiveGlow(it) }
+            }
 
-            SectionHeader("Playback")
-            ChoiceSetting(
-                title = "Streaming quality",
-                description = "Applies to songs that start playing after you change it.",
-                options = AudioQuality.entries.map { it to it.label },
-                selected = AppSettings.audioQuality
-            ) { AppSettings.updateAudioQuality(it) }
-            ChoiceSetting(
-                title = "Fade between songs",
-                description = "Each song fades out at its end and the next one fades in.",
-                options = listOf(0 to "Off", 2 to "2 s", 4 to "4 s", 6 to "6 s"),
-                selected = PlaybackSettings.fadeSeconds
-            ) { PlaybackSettings.updateFadeSeconds(it) }
+            SettingsGroup("Performance") {
+                SwitchRow(
+                    title = "Battery Saver",
+                    description = "Uses simpler visuals and skips next-track prefetching.",
+                    checked = AppSettings.batterySaver,
+                    onCheckedChange = AppSettings::updateBatterySaver
+                )
+            }
 
-            SectionHeader("Data")
-            ListItem(
-                modifier = Modifier.clickable { confirmClearSearches = true },
-                headlineContent = { Text("Clear search history") },
-                supportingContent = { Text("${SearchHistoryRepository.recent.size} saved") }
-            )
-            ListItem(
-                modifier = Modifier.clickable { confirmClearPlays = true },
-                headlineContent = { Text("Clear recently played") },
-                supportingContent = { Text("${HistoryRepository.recentSongs.size} saved") }
-            )
-            ListItem(
-                headlineContent = { Text("Autoplay similar songs") },
-                supportingContent = {
-                    Text("When the queue is about to run out, keep playing songs similar to the last one.")
-                },
-                trailingContent = {
-                    Switch(
-                        checked = AppSettings.autoplay,
-                        onCheckedChange = { AppSettings.updateAutoplay(it) }
-                    )
+            SettingsGroup("Liquid glass") {
+                SwitchRow(
+                    title = "Liquid glass effect",
+                    description = "Frosted panels and a softly moving glow. Turn off for a classic solid look.",
+                    checked = AppSettings.glassEnabled
+                ) { AppSettings.updateGlassEnabled(it) }
+
+                if (AppSettings.glassEnabled) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Transparency", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                text = "${(AppSettings.glassTransparency * 100).roundToInt()}%",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Slider(
+                            value = AppSettings.glassTransparency,
+                            onValueChange = { AppSettings.updateGlassTransparency(it) },
+                            valueRange = 0f..1f
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "Frosted",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "Clear",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
-            )
+            }
 
-            BackupSection()
+            SettingsGroup("Playback") {
+                ChoiceSetting(
+                    title = "Streaming quality",
+                    description = "Applies to songs that start playing after you change it.",
+                    options = AudioQuality.entries.map { it to it.label },
+                    selected = AppSettings.audioQuality
+                ) { AppSettings.updateAudioQuality(it) }
+                ChoiceSetting(
+                    title = "Fade between songs",
+                    description = "Each song fades out at its end and the next one fades in.",
+                    options = listOf(0 to "Off", 2 to "2 s", 4 to "4 s", 6 to "6 s"),
+                    selected = PlaybackSettings.fadeSeconds
+                ) { PlaybackSettings.updateFadeSeconds(it) }
+                SwitchRow(
+                    title = "Autoplay similar songs",
+                    description = "When the queue is about to run out, keep playing songs similar to the last one.",
+                    checked = AppSettings.autoplay
+                ) { AppSettings.updateAutoplay(it) }
+            }
 
-            SectionHeader("About")
-            ListItem(
-                headlineContent = { Text("Version") },
-                supportingContent = { Text(version) }
-            )
-            ListItem(
-                modifier = Modifier.clickable { showAbout = true },
-                headlineContent = { Text("About LAbel") },
-                supportingContent = { Text("Credits and licenses") }
-            )
+            SettingsGroup("Sound") {
+                ListItem(
+                    modifier = Modifier.clickable { Navigator.open(DetailPage.SoundPage) },
+                    colors = transparent,
+                    headlineContent = { Text("Equalizer and sound") },
+                    supportingContent = { Text("Equalizer, loudness boost and skip silence") }
+                )
+            }
+
+            AudioCacheSettings()
+            PlaybackDiagnosticsSettings()
+
+            SettingsGroup("Data") {
+                ListItem(
+                    modifier = Modifier.clickable { confirmClearSearches = true },
+                    colors = transparent,
+                    headlineContent = { Text("Clear search history") },
+                    supportingContent = { Text("${SearchHistoryRepository.recent.size} saved") }
+                )
+                ListItem(
+                    modifier = Modifier.clickable { confirmClearPlays = true },
+                    colors = transparent,
+                    headlineContent = { Text("Clear recently played") },
+                    supportingContent = { Text("${HistoryRepository.recentSongs.size} saved") }
+                )
+            }
+
+            SettingsGroup("Backup") {
+                BackupSection()
+            }
+            ScrobbleSettings()
+            UpdatesSettings()
+
+            SettingsGroup("About") {
+                ListItem(
+                    colors = transparent,
+                    headlineContent = { Text("Version") },
+                    supportingContent = { Text(version) }
+                )
+                ListItem(
+                    modifier = Modifier.clickable { showAbout = true },
+                    colors = transparent,
+                    headlineContent = { Text("About LAbel") },
+                    supportingContent = { Text("Credits and licenses") }
+                )
+            }
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -151,6 +232,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             "Built with open-source software:\n" +
                             "• NewPipeExtractor (GPL-3.0)\n" +
                             "• Jetpack Compose, Media3, Palette, Coil and OkHttp (Apache 2.0)\n" +
+                            "• Haze for the glass blur\n" +
                             "• Synced lyrics from LRCLIB\n\n" +
                             "LAbel is not affiliated with, endorsed by, or connected to " +
                             "YouTube or Google."
@@ -160,43 +242,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                 TextButton(onClick = { showAbout = false }) { Text("Close") }
             }
         )
-    }
-}
-
-@Composable
-private fun <T> ChoiceSetting(
-    title: String,
-    description: String?,
-    options: List<Pair<T, String>>,
-    selected: T,
-    onSelect: (T) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        Text(title, style = MaterialTheme.typography.titleSmall)
-        if (description != null) {
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            options.forEach { (value, label) ->
-                FilterChip(
-                    selected = value == selected,
-                    onClick = { onSelect(value) },
-                    label = { Text(label) }
-                )
-            }
-        }
     }
 }
 

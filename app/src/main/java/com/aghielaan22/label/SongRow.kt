@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import androidx.compose.runtime.collectAsState
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -116,19 +117,24 @@ fun SongRow(
                 }
             ),
             headlineContent = { Text(song.title, maxLines = 1) },
-            supportingContent = { Text(song.artist, maxLines = 1) },
-            leadingContent = {
-                AsyncImage(
-                    model = song.artworkUrl(if (wideArtwork) 384 else 256),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .then(
-                            if (wideArtwork) Modifier.size(width = 89.dp, height = 50.dp)
-                            else Modifier.size(52.dp)
-                        )
-                        .clip(RoundedCornerShape(8.dp))
-                )
+            supportingContent = { OfflineSongSubtitle(song) },            leadingContent = {
+                if (wideArtwork) {
+                    AsyncImage(
+                        model = song.artworkUrl(384),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(width = 89.dp, height = 50.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                    )
+                } else {
+                    Artwork(
+                        url = song.artworkUrl(256),
+                        fallbackUrl = song.thumbnailUrl,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.size(52.dp)
+                    )
+                }
             },
             trailingContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -156,4 +162,10 @@ fun SongRow(
             onRemoveFromPlaylist = onRemoveFromPlaylist
         )
     }
+}
+@Composable
+private fun OfflineSongSubtitle(song: Song) {
+    val cached by PlaybackAudioCache.offlineTracks.collectAsState()
+    val ready = CachedAudioTrack(song.id, AppSettings.audioQuality) in cached
+    Text(if (ready) "Offline · ${song.artist}" else song.artist, maxLines = 1)
 }

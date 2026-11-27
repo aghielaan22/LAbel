@@ -32,20 +32,18 @@ class AppDownloader : Downloader() {
             values.forEach { builder.addHeader(name, it) }
         }
 
-        val response = client.newCall(builder.build()).execute()
-
-        if (response.code == 429) {
-            response.close()
-            throw ReCaptchaException("reCaptcha challenge requested", url)
+        return client.newCall(builder.build()).execute().use { response ->
+            if (response.code == 429) {
+                throw ReCaptchaException("reCaptcha challenge requested", url)
+            }
+            Response(
+                response.code,
+                response.message,
+                response.headers.toMultimap(),
+                response.body?.string(),
+                response.request.url.toString()
+            )
         }
-
-        return Response(
-            response.code,
-            response.message,
-            response.headers.toMultimap(),
-            response.body?.string(),
-            response.request.url.toString()
-        )
     }
 
     companion object {

@@ -11,7 +11,7 @@ import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQu
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
-import java.util.concurrent.ConcurrentHashMap
+import android.util.LruCache
 import kotlin.math.abs
 import android.net.Uri
 
@@ -21,12 +21,13 @@ object MusicRepository {
         NewPipe.init(AppDownloader())
     }
 
-    private val urlCache = ConcurrentHashMap<String, Pair<String, Long>>()
+    private val urlCache = LruCache<String, Pair<String, Long>>(128)
 
     // ---- Search ----
 
     fun searchSongs(query: String): List<Song> =
         searchStreams(query, YoutubeSearchQueryHandlerFactory.MUSIC_SONGS)
+            .also(PlaylistArtwork::rememberSearchCovers)
 
     fun searchVideos(query: String): List<Song> =
         searchStreams(query, YoutubeSearchQueryHandlerFactory.MUSIC_VIDEOS)
@@ -87,16 +88,34 @@ object MusicRepository {
             .filter { it.id != song.id }
             .distinctBy { it.id }
     }
+    /** Loads a YouTube or YouTube Music playlist: its name and up to [maxSongs] songs. */
+    fun importPlaylist(url: String, maxSongs: Int = 500): Pair<String, List<Song>> {
+        val service = ServiceList.YouTube
+        val info = PlaylistInfo.getInfo(service, url)
+        val songs = info.relatedItems.map { toSong(it) }.toMutableList()
+
+        var next = info.nextPage
+        var pages = 0
+        while (next != null && songs.size < maxSongs && pages < 10) {
+            val page = PlaylistInfo.getMoreItems(service, url, next)
+            songs.addAll(page.items.map { toSong(it) })
+            next = page.nextPage
+            pages++
+        }
+        return info.name to songs.distinctBy { it.id }.take(maxSongs)
+    }
 
     // ---- Playback ----
 
-    fun getAudioUrl(videoUrl: String): String {
-        val quality = AppSettings.audioQuality
-        val cacheKey = "$videoUrl|${quality.name}"
+    fun invalidateAudioUrl(videoUrl: String) {
+        AudioQuality.entries.forEach { urlCache.remove("$videoUrl|${it.name}") }
+    }
 
-        val cached = urlCache[cacheKey]
+    fun getAudioUrl(videoUrl: String, quality: AudioQuality, useCache: Boolean = true): String {        val cacheKey = "$videoUrl|${quality.name}"
+
+        val cached = urlCache.get(cacheKey)
         val now = System.currentTimeMillis()
-        if (cached != null && now - cached.second < 5 * 60 * 60 * 1000L) {
+        if (useCache && cached != null && now < cached.second) {
             return cached.first
         }
 
@@ -115,7 +134,9 @@ object MusicRepository {
         } ?: streams.firstOrNull()
         ?: throw IllegalStateException("No playable audio stream found")
 
-        urlCache[cacheKey] = chosen.content to now
+        val expiry = Uri.parse(chosen.content).getQueryParameter("expire")
+        val validUntil = StreamCachePolicy.validUntil(now, expiry)
+        if (useCache) urlCache.put(cacheKey, chosen.content to validUntil)
         return chosen.content
     }
     // ---- Helpers ----
@@ -139,6 +160,10 @@ object MusicRepository {
         thumbnailUrl = bestThumbnail(item)
     )
 
-    private fun bestThumbnail(item: InfoItem): String? =
-        item.thumbnails.maxByOrNull { it.height }?.url
+    private fun bestThumbnail(item: InfoItem): String? {
+        val images = item.thumbnails
+        // Some entries don't say how big they are, and the list usually runs small to large
+        val known = images.filter { it.height > 0 }
+        return (known.maxByOrNull { it.height } ?: images.lastOrNull())?.url
+    }
 }

@@ -47,10 +47,9 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.ui.graphics.Color
 
 enum class SearchFilter(val label: String) {
     All("All"),
@@ -60,74 +59,30 @@ enum class SearchFilter(val label: String) {
     Videos("Videos")
 }
 
-/** Runs [block] off the main thread; returns null instead of failing. */
-private suspend fun <T> loadQuietly(block: () -> T): T? =
-    try {
-        withContext(Dispatchers.IO) { block() }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        null
-    }
-
 @Composable
-fun SearchScreen(modifier: Modifier = Modifier) {
-    var query by remember { mutableStateOf("") }
-    var filter by remember { mutableStateOf(SearchFilter.All) }
-    var songs by remember { mutableStateOf<List<Song>>(emptyList()) }
-    var videos by remember { mutableStateOf<List<Song>>(emptyList()) }
-    var albums by remember { mutableStateOf<List<Album>>(emptyList()) }
-    var artists by remember { mutableStateOf<List<Artist>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var searchedQuery by remember { mutableStateOf("") }
+internal fun SearchScreen(state: SearchTabState, modifier: Modifier = Modifier) {
+    val query = state.query
+    val filter = state.filter
+    val result = state.request
+    val trimmedQuery = result.query
+    var retry by remember(result) { mutableStateOf(0) }
     val focusManager = LocalFocusManager.current
 
-    LaunchedEffect(query) {
-        val q = query
-        if (q.isBlank()) {
-            songs = emptyList()
-            videos = emptyList()
-            albums = emptyList()
-            artists = emptyList()
-            error = null
-            searchedQuery = ""
-            return@LaunchedEffect
-        }
-        delay(500)
-        isLoading = true
-        error = null
-        songs = emptyList()
-        videos = emptyList()
-        albums = emptyList()
-        artists = emptyList()
-        try {
-            // Songs first, so they appear while the rest is still loading
-            try {
-                songs = withContext(Dispatchers.IO) { MusicRepository.searchSongs(q) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                error = friendlyMessage(e)
-            }
-            artists = loadQuietly { MusicRepository.searchArtists(q) } ?: emptyList()
-            albums = loadQuietly { MusicRepository.searchAlbums(q) } ?: emptyList()
-            videos = loadQuietly { MusicRepository.searchVideos(q) } ?: emptyList()
-            searchedQuery = q
-        } finally {
-            isLoading = false
-        }
+    LaunchedEffect(result, retry) {
+        if (result.pending.isEmpty()) return@LaunchedEffect
+        if (retry == 0) delay(325)
+        result.loadPending()
     }
 
     Column(modifier = modifier.fillMaxSize()) {
         OutlinedTextField(
             value = query,
-            onValueChange = { query = it },
+            onValueChange = state::updateQuery,
             placeholder = { Text("Search songs or artists") },
             singleLine = true,
             trailingIcon = {
                 if (query.isNotEmpty()) {
-                    IconButton(onClick = { query = "" }) {
+                    IconButton(onClick = { state.updateQuery("") }) {
                         Icon(Icons.Default.Close, contentDescription = "Clear search")
                     }
                 }
@@ -139,9 +94,15 @@ fun SearchScreen(modifier: Modifier = Modifier) {
                     focusManager.clearFocus()
                 }
             ),
+            shape = RoundedCornerShape(28.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = Color.Transparent
+            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
+                .glassPanel(RoundedCornerShape(28.dp))
         )
 
         if (query.isNotBlank()) {
@@ -154,39 +115,50 @@ fun SearchScreen(modifier: Modifier = Modifier) {
                 SearchFilter.entries.forEach { option ->
                     FilterChip(
                         selected = filter == option,
-                        onClick = { filter = option },
+                        onClick = { state.filter = option },
                         label = { Text(option.label) }
                     )
                 }
             }
         }
 
-        if (isLoading || PlayerController.isLoading) {
-            CircularProgressIndicator(modifier = Modifier.padding(16.dp))
-        }
+        val loading = if (filter == SearchFilter.All) result.pending.isNotEmpty() else filter in result.pending
+        val failures = if (filter == SearchFilter.All) result.failed else result.failed.filterKeys { it == filter }
 
-        (error ?: PlayerController.errorMessage)?.let {
-            Text(
-                text = it,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-        }
-
-        if (query.isBlank()) {
-            RecentSearches(onPick = { query = it })
+        if (trimmedQuery.isBlank()) {
+            RecentSearches(onPick = state::updateQuery)
         } else {
-            val nothingFound = !isLoading && error == null && searchedQuery == query &&
-                    songs.isEmpty() && videos.isEmpty() && albums.isEmpty() && artists.isEmpty()
+            if (loading) {
+                CircularProgressIndicator(modifier = Modifier.padding(16.dp).size(24.dp), strokeWidth = 2.dp)
+            }
+            if (failures.isNotEmpty()) {
+                val failure = if (filter == SearchFilter.All && (result.hasResults(filter) || loading)) {
+                    "Couldn't load ${failures.keys.joinToString { it.label.lowercase() }}."
+                } else failures.values.first()
+                Row(Modifier.padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(failure, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
+                    TextButton(
+                        onClick = {
+                            result.prepareRetry()
+                            retry++
+                        },
+                        enabled = result.pending.isEmpty()
+                    ) { Text("Retry") }
+                }
+            }
+            PlayerController.errorMessage?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp))
+            }
+            val nothingFound = !loading && failures.isEmpty() && !result.hasResults(filter)
             SearchResults(
-                query = query,
+                query = trimmedQuery,
                 filter = filter,
-                songs = songs,
-                videos = videos,
-                albums = albums,
-                artists = artists,
+                songs = result.songs,
+                videos = result.videos,
+                albums = result.albums,
+                artists = result.artists,
                 nothingFound = nothingFound,
-                onShowAll = { filter = it }
+                onShowAll = { state.filter = it }
             )
         }
     }
@@ -331,71 +303,65 @@ fun SectionHeader(title: String) {
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TopSongCard(song: Song, kind: String, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
+            .glassPanel(RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+        AsyncImage(
+            model = song.artworkUrl(400),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(88.dp)
+                .clip(RoundedCornerShape(10.dp))
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 12.dp)
         ) {
-            AsyncImage(
-                model = song.artworkUrl(400),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(88.dp)
-                    .clip(RoundedCornerShape(10.dp))
+            Text(song.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+            Text(
+                text = "$kind · ${song.artist}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
             )
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 12.dp)
-            ) {
-                Text(song.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                Text(
-                    text = "$kind · ${song.artist}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
-            }
-            Icon(Icons.Default.PlayArrow, contentDescription = "Play")
         }
+        Icon(Icons.Default.PlayArrow, contentDescription = "Play")
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TopArtistCard(artist: Artist) {
-    Card(
-        onClick = { Navigator.open(DetailPage.ArtistPage(artist)) },
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
+            .glassPanel(RoundedCornerShape(20.dp))
+            .clickable { Navigator.open(DetailPage.ArtistPage(artist)) }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+        ArtistAvatar(artist, 88.dp)
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 12.dp)
         ) {
-            ArtistAvatar(artist, 88.dp)
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 12.dp)
-            ) {
-                Text(artist.name, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                Text(
-                    text = "Artist",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(artist.name, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+            Text(
+                text = "Artist",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

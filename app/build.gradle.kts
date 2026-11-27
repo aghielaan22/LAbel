@@ -13,8 +13,8 @@ android {
         applicationId = "com.aghielaan22.label"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0-beta"
+        versionCode = 4
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -55,6 +55,7 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.2.0")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.palette:palette-ktx:1.0.0")
+    implementation("dev.chrisbanes.haze:haze:1.7.2")
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
@@ -62,4 +63,10 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    testImplementation("junit:junit:4.13.2")
+}
+tasks.register("fastCheck") {
+    group = "verification"
+    description = "Builds the debug APK and runs its local unit tests."
+    dependsOn("assembleDebug", "testDebugUnitTest")
 }

@@ -13,41 +13,51 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 @Composable
-fun GestureArtwork(song: Song?, size: Dp) {
+fun GestureArtwork(song: Song?, size: Dp, animate: Boolean = true) {
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
-    val offsetX = remember { Animatable(0f) }
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var settleJob by remember { mutableStateOf<Job?>(null) }
+    val currentSong by rememberUpdatedState(song)
     var heart by remember { mutableStateOf(false) }
     val threshold = with(LocalDensity.current) { 80.dp.toPx() }
+
+    fun settle() {
+        settleJob?.cancel()
+        settleJob = scope.launch {
+            Animatable(offsetX).animateTo(0f, spring(Spring.DampingRatioMediumBouncy)) {
+                offsetX = value
+            }
+        }
+    }
 
     LaunchedEffect(heart) {
         if (heart) {
@@ -57,51 +67,51 @@ fun GestureArtwork(song: Song?, size: Dp) {
     }
 
     Box(modifier = Modifier.size(size), contentAlignment = Alignment.Center) {
-        AsyncImage(
-            model = song?.artworkUrl(1200),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
+        val style = AppSettings.artworkStyle
+        NowPlayingArtwork(
+            song = song,
+            style = style,
+            size = size,
+            animate = animate && style == ArtworkStyle.Vinyl,
+            playing = style == ArtworkStyle.Vinyl && PlayerController.isPlaying,
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    translationX = offsetX.value
-                    rotationZ = offsetX.value / 60f
-                    alpha = 1f - (abs(offsetX.value) / (threshold * 6f)).coerceIn(0f, 0.4f)
+                    translationX = offsetX
+                    rotationZ = offsetX / 60f
+                    alpha = 1f - (abs(offsetX) / (threshold * 6f)).coerceIn(0f, 0.4f)
                 }
-                .clip(RoundedCornerShape(16.dp))
-                .pointerInput(Unit) {
+                .pointerInput(threshold) {
                     detectHorizontalDragGestures(
+                        onDragStart = { settleJob?.cancel() },
                         onDragEnd = {
-                            val dx = offsetX.value
-                            scope.launch {
-                                if (dx > threshold) {
+                            when {
+                                offsetX > threshold -> {
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                     PlayerController.previous()
-                                } else if (dx < -threshold) {
+                                }
+                                offsetX < -threshold -> {
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                     PlayerController.next()
                                 }
-                                offsetX.animateTo(
-                                    0f,
-                                    spring(Spring.DampingRatioMediumBouncy)
-                                )
                             }
+                            settle()
                         },
-                        onDragCancel = { scope.launch { offsetX.animateTo(0f) } },
+                        onDragCancel = ::settle,
                         onHorizontalDrag = { change, dragAmount ->
                             change.consume()
-                            scope.launch { offsetX.snapTo(offsetX.value + dragAmount) }
+                            offsetX = (offsetX + dragAmount).coerceIn(-threshold * 4, threshold * 4)
                         }
                     )
                 }
-                .pointerInput(song?.id) {
+                .pointerInput(Unit) {
                     detectTapGestures(
                         onDoubleTap = {
-                            song?.let {
+                            currentSong?.let {
                                 if (!LibraryRepository.isLiked(it)) LibraryRepository.toggleLike(it)
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                heart = true
                             }
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            heart = true
                         }
                     )
                 }

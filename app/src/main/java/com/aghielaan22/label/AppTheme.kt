@@ -16,6 +16,7 @@ import com.aghielaan22.label.ui.theme.Typography
 
 enum class AppTheme(val label: String, val seed: Color?, val amoled: Boolean = false) {
     Dynamic("Dynamic", null),
+    AlbumArt("Album art", null),
     Violet("Violet", Color(0xFF7C4DFF)),
     Ocean("Ocean", Color(0xFF0288D1)),
     Emerald("Emerald", Color(0xFF00A86B)),
@@ -111,15 +112,21 @@ fun LAbelAppTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
     val context = LocalContext.current
     val theme = AppSettings.appTheme
 
-    val colorScheme = if (theme == AppTheme.Dynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    val colors = if (theme == AppTheme.AlbumArt) rememberSongColors(PlayerController.currentSong) else null
+    val base = if (theme == AppTheme.Dynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else {
         colorSchemeFromSeed(
-            seed = theme.seed ?: AppTheme.Violet.seed!!,
+            seed = colors?.accent ?: theme.seed ?: AppTheme.Violet.seed!!,
             dark = darkTheme || theme.amoled,
             amoled = theme.amoled
         )
     }
 
-    MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
+    // With liquid glass on, plain surfaces become see-through, so the glow shows behind
+    // list rows and pages instead of dark strips.
+    val colorScheme = if (AppSettings.glassEffectsEnabled) base.copy(surface = Color.Transparent) else base
+    androidx.compose.runtime.CompositionLocalProvider(LocalSongColors provides colors) {
+        MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
+    }
 }

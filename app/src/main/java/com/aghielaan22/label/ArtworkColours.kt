@@ -1,30 +1,30 @@
 package com.aghielaan22.label
 
-import android.graphics.BitmapFactory
+import android.content.Context
+import coil3.imageLoader
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.request.allowHardware
+import coil3.toBitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.palette.graphics.Palette
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.util.concurrent.ConcurrentHashMap
+import android.util.LruCache
 
 data class PlayerColors(val background: Color, val accent: Color)
 
 object ArtworkColors {
 
-    private val client = OkHttpClient()
-    private val cache = ConcurrentHashMap<String, PlayerColors>()
+    private val cache = LruCache<String, PlayerColors>(96)
 
     /** Downloads the cover at [url] and works out its colors. Call from a background thread. */
-    fun extract(url: String): PlayerColors? {
-        cache[url]?.let { return it }
+    suspend fun extract(context: Context, url: String): PlayerColors? {
+        cache.get(url)?.let { return it }
 
-        val request = Request.Builder().url(url).build()
-        val bitmap = client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return null
-            response.body?.byteStream()?.let { BitmapFactory.decodeStream(it) }
-        } ?: return null
+        val request = ImageRequest.Builder(context).data(url).size(128, 128).allowHardware(false).build()
+        val result = context.imageLoader.execute(request) as? SuccessResult ?: return null
+        val bitmap = result.image.toBitmap()
 
         val palette = Palette.from(bitmap).generate()
 
@@ -45,9 +45,9 @@ object ArtworkColors {
 
         val colors = PlayerColors(
             background = background,
-            accent = accentSwatch?.let { Color(it.rgb) } ?: Color.White
+            accent = accentSwatch?.let { Color(it.rgb) } ?: Color(base.rgb)
         )
-        cache[url] = colors
+        cache.put(url, colors)
         return colors
     }
 }

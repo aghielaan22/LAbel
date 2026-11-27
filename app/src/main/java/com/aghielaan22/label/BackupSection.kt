@@ -60,7 +60,6 @@ fun BackupSection() {
         }
     }
 
-    SectionHeader("Backup")
     ListItem(
         modifier = Modifier.clickable {
             val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())

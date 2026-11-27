@@ -47,26 +47,34 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.drawscope.translate
 
 /** A moving highlight for loading placeholders. */
 fun Modifier.shimmer(shape: Shape = RoundedCornerShape(12.dp)): Modifier = composed {
+    val base = MaterialTheme.colorScheme.surfaceVariant
+    if (AppSettings.batterySaver) return@composed this.background(base, shape)
+
     val transition = rememberInfiniteTransition(label = "shimmer")
-    val progress by transition.animateFloat(
+    val progress = transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(1300, easing = LinearEasing)),
         label = "shimmerProgress"
     )
-    val base = MaterialTheme.colorScheme.surfaceVariant
-    val x = -400f + progress * 1600f
-    this.background(
-        brush = Brush.linearGradient(
-            colors = listOf(base.copy(alpha = 0.5f), base, base.copy(alpha = 0.5f)),
-            start = Offset(x, 0f),
-            end = Offset(x + 400f, 0f)
-        ),
-        shape = shape
-    )
+    this.clip(shape).drawWithCache {
+        val width = size.width.coerceAtLeast(1f)
+        val background = base.copy(alpha = 0.5f)
+        val highlight = Brush.horizontalGradient(
+            listOf(Color.Transparent, base, Color.Transparent),
+            endX = width
+        )
+        onDrawBehind {
+            drawRect(background)
+            translate(left = (progress.value * 2f - 1f) * width) { drawRect(highlight) }
+        }
+    }
 }
 
 /** Clickable that squishes a little while pressed. */

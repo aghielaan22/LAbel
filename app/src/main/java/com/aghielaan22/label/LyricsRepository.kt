@@ -4,24 +4,27 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
-import java.util.concurrent.ConcurrentHashMap
+import android.util.LruCache
+import java.io.IOException
 import kotlin.math.abs
 
 data class LyricLine(val timeMs: Long, val text: String)
+
+data class SongLyrics(val synced: List<LyricLine> = emptyList(), val plain: String? = null)
 
 object LyricsRepository {
 
     private val client = OkHttpClient()
 
     // Remembers lyrics we already fetched, so we don't ask the server again
-    private val cache = ConcurrentHashMap<String, List<LyricLine>>()
+    private val cache = LruCache<String, SongLyrics>(64)
 
     private val timeTag = Regex("""\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]""")
 
-    /** Returns the synced lyrics for [song], or an empty list if none were found. */
-    fun fetch(song: Song, durationSec: Long): List<LyricLine> {
-        cache[song.id]?.let { return it }
-
+    fun fetch(song: Song, durationSec: Long, useCache: Boolean = true): SongLyrics {        val cacheKey = "${song.id}|$durationSec"
+        if (useCache) {
+            cache.get(cacheKey)?.let { return it }
+        }
         val url = "https://lrclib.net/api/search".toHttpUrl().newBuilder()
             .addQueryParameter("track_name", song.title)
             .addQueryParameter("artist_name", song.artist.removeSuffix(" - Topic"))
@@ -33,33 +36,40 @@ object LyricsRepository {
             .build()
 
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return emptyList()
-            val body = response.body?.string() ?: return emptyList()
+            if (!response.isSuccessful) throw IOException("Lyrics server returned HTTP ${response.code}")
+            val body = response.body?.string() ?: throw IOException("Empty lyrics response")
             val results = JSONArray(body)
 
-            // Pick the result whose length is closest to the song we're playing.
-            var bestLyrics: String? = null
-            var bestDiff = Double.MAX_VALUE
+            var synced = emptyList<LyricLine>()
+            var syncedDiff = Double.POSITIVE_INFINITY
+            var plain: String? = null
+            var plainDiff = Double.POSITIVE_INFINITY
             for (i in 0 until results.length()) {
-                val o = results.getJSONObject(i)
-                if (o.isNull("syncedLyrics")) continue
-                val synced = o.getString("syncedLyrics")
-                if (synced.isBlank()) continue
-                val diff = if (durationSec > 0) {
-                    abs(o.optDouble("duration", 0.0) - durationSec)
-                } else 0.0
-                if (diff < bestDiff) {
-                    bestDiff = diff
-                    bestLyrics = synced
+                val row = results.optJSONObject(i) ?: continue
+                val duration = row.optDouble("duration", Double.NaN)
+                val diff = when {
+                    durationSec <= 0 -> 0.0
+                    duration.isFinite() && duration > 0 -> abs(duration - durationSec)
+                    else -> 60.0
+                }
+                val unsynced = row.optString("plainLyrics").takeIf {
+                    !row.isNull("plainLyrics") && it.isNotBlank()
+                }
+                if (unsynced != null && diff < plainDiff) {
+                    plain = unsynced
+                    plainDiff = diff
+                }
+                if (diff <= 5.0 && diff < syncedDiff && !row.isNull("syncedLyrics")) {
+                    val lines = parseLrc(row.optString("syncedLyrics"))
+                    if (lines.isNotEmpty()) {
+                        synced = lines
+                        syncedDiff = diff
+                    }
                 }
             }
-
-            // If the closest match is a very different length, it's probably another
-            // version of the song, and its timing would be wrong. No lyrics beat bad lyrics.
-            val usable = bestLyrics != null && (durationSec <= 0 || bestDiff <= 5.0)
-            val lines = if (usable) parseLrc(bestLyrics!!) else emptyList()
-            cache[song.id] = lines
-            return lines
+            val lyrics = SongLyrics(synced, plain)
+            if (useCache) cache.put(cacheKey, lyrics)
+            return lyrics
         }
     }
 

@@ -1,6 +1,5 @@
 package com.aghielaan22.label
 
-import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -9,24 +8,28 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import java.io.IOException
 
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
     private var player: ExoPlayer? = null
+    private var widgetListener: Player.Listener? = null
+    private var trackLoopPlayback: TrackLoopPlayback? = null
+    private var trackSkipPlayback: TrackSkipPlayback? = null
+    private val prefetcher by lazy { NextTrackPrefetcher(this) }
     private val handler = Handler(Looper.getMainLooper())
 
     private val ticker = object : Runnable {
         override fun run() {
             val busy = applyEffects()
+            player?.let(prefetcher::update)
             // Check often while a fade is happening, and only occasionally otherwise
             handler.postDelayed(this, if (busy) 100L else 500L)
         }
@@ -37,27 +40,9 @@ class PlaybackService : MediaSessionService() {
         CrashReporter.install(this)
         PlaybackSettings.init(this)
         AppSettings.init(this)
+        SoundEngine.init(this)
 
-        // Turns a YouTube watch link into a real audio stream URL, right when needed
-        val dataSourceFactory = ResolvingDataSource.Factory(
-            DefaultHttpDataSource.Factory(),
-            ResolvingDataSource.Resolver { dataSpec ->
-                val host = dataSpec.uri.host.orEmpty()
-                if (host.endsWith("youtube.com")) {
-                    try {
-                        val streamUrl = MusicRepository.getAudioUrl(dataSpec.uri.toString())
-                        dataSpec.withUri(Uri.parse(streamUrl))
-                    } catch (e: Exception) {
-                        throw IOException("Could not resolve audio stream", e)
-                    }
-                } else {
-                    dataSpec
-                }
-            }
-        )
-
-        val exoPlayer = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+        val exoPlayer = ExoPlayer.Builder(this, MusicGlowRenderersFactory(this))            .setMediaSourceFactory(DefaultMediaSourceFactory(playbackDataSource()))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -68,19 +53,42 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
 
+        // The equalizer and loudness boost attach to the player's own audio
+        exoPlayer.addListener(object : Player.Listener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                SoundEngine.attach(audioSessionId)
+            }
+        })
+        if (exoPlayer.audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
+            SoundEngine.attach(exoPlayer.audioSessionId)
+        }
+
         player = exoPlayer
+        trackLoopPlayback = TrackLoopPlayback(exoPlayer)
+        trackSkipPlayback = TrackSkipPlayback(this, exoPlayer)
         mediaSession = MediaSession.Builder(this, exoPlayer).build()
+        widgetListener = NowPlayingWidget.attach(this, exoPlayer)
         handler.post(ticker)
     }
 
+    private fun playbackDataSource(): DataSource.Factory {
+        val http = DefaultHttpDataSource.Factory()
+        PlaybackAudioCache.start(applicationContext)
+        return DataSource.Factory { PlaybackAudioCache.dataSource(http, AppSettings.audioQuality) }
+    }
+
     /**
-     * Applies the sleep timer and the fades between songs by setting the volume.
+     * Applies skip silence, the sleep timer and the fades between songs.
      * Returns true while something is fading, so we know to check more often.
      */
     private fun applyEffects(): Boolean {
         val p = player ?: return false
         var volume = 1f
         var busy = false
+
+        if (p.skipSilenceEnabled != SoundEngine.skipSilence) {
+            p.skipSilenceEnabled = SoundEngine.skipSilence
+        }
 
         // Sleep timer: a countdown, or "end of song"
         if (SleepTimer.endAtMs > 0L) {
@@ -131,13 +139,22 @@ class PlaybackService : MediaSessionService() {
     ): MediaSession? = mediaSession
 
     override fun onDestroy() {
+        widgetListener?.let { player?.removeListener(it) }
+        widgetListener = null
+        trackSkipPlayback?.close()
+        trackSkipPlayback = null
+        trackLoopPlayback?.close()
+        trackLoopPlayback = null
         handler.removeCallbacks(ticker)
+        prefetcher.close()
+        SoundEngine.release()
         mediaSession?.run {
             player.release()
             release()
         }
         mediaSession = null
         player = null
+        NowPlayingWidget.serviceClosed(this)
         super.onDestroy()
     }
 

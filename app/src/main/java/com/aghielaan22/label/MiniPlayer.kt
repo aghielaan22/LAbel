@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,7 +19,6 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -55,10 +55,11 @@ fun MiniPlayer(onClick: () -> Unit, modifier: Modifier = Modifier) {
     ) {
         var drag by remember { mutableStateOf(Offset.Zero) }
 
-        Surface(
-            tonalElevation = 3.dp,
+        Box(
             modifier = modifier
                 .fillMaxWidth()
+                .padding(bottom = 8.dp)
+                .glassPanel(RoundedCornerShape(24.dp))
                 .clickable(onClick = onClick)
                 .pointerInput(Unit) {
                     detectDragGestures(
@@ -93,13 +94,11 @@ fun MiniPlayer(onClick: () -> Unit, modifier: Modifier = Modifier) {
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AsyncImage(
-                    model = song.artworkUrl(192),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                Artwork(
+                    url = song.artworkUrl(192),
+                    fallbackUrl = song.thumbnailUrl,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.size(48.dp)
                 )
                 Column(
                     modifier = Modifier
@@ -115,6 +114,7 @@ fun MiniPlayer(onClick: () -> Unit, modifier: Modifier = Modifier) {
                     Text(
                         text = song.artist,
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

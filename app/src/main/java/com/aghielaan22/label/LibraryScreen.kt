@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -44,10 +43,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
-sealed interface LibraryPage {
+private sealed interface LibraryPage {
     data object Overview : LibraryPage
     data object Liked : LibraryPage
+    data class Smart(val rule: SmartPlaylist) : LibraryPage
     data class PlaylistPage(val id: String) : LibraryPage
 }
 
@@ -59,10 +62,17 @@ fun LibraryScreen(modifier: Modifier = Modifier) {
         LibraryPage.Overview -> LibraryOverview(
             modifier = modifier,
             onOpenLiked = { page = LibraryPage.Liked },
+            onOpenSmart = { page = LibraryPage.Smart(it) },
             onOpenPlaylist = { page = LibraryPage.PlaylistPage(it) }
         )
 
         LibraryPage.Liked -> LikedSongsPage(
+            modifier = modifier,
+            onBack = { page = LibraryPage.Overview }
+        )
+
+        is LibraryPage.Smart -> SmartPlaylistScreen(
+            rule = current.rule,
             modifier = modifier,
             onBack = { page = LibraryPage.Overview }
         )
@@ -79,6 +89,7 @@ fun LibraryScreen(modifier: Modifier = Modifier) {
 private fun LibraryOverview(
     modifier: Modifier,
     onOpenLiked: () -> Unit,
+    onOpenSmart: (SmartPlaylist) -> Unit,
     onOpenPlaylist: (String) -> Unit
 ) {
     var creating by remember { mutableStateOf(false) }
@@ -108,6 +119,27 @@ private fun LibraryOverview(
             )
         }
         item {
+            ListItem(
+                modifier = Modifier.clickable { Navigator.open(DetailPage.StatsPage) },
+                leadingContent = {
+                    Icon(
+                        Icons.Default.BarChart,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                headlineContent = { Text("Your stats") },
+                supportingContent = { Text("Top artists, top songs and listening time") }
+            )
+        }
+        items(SmartPlaylist.entries, key = { "smart:${it.name}" }) { rule ->
+            ListItem(
+                modifier = Modifier.clickable { onOpenSmart(rule) },
+                headlineContent = { Text(rule.title) },
+                supportingContent = { Text(rule.subtitle) }
+            )
+        }
+        item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -116,8 +148,10 @@ private fun LibraryOverview(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Playlists", style = MaterialTheme.typography.titleLarge)
-                TextButton(onClick = { creating = true }) { Text("New playlist") }
-            }
+                Row {
+                    TextButton(onClick = { Navigator.open(DetailPage.ImportPage) }) { Text("Import") }
+                    TextButton(onClick = { creating = true }) { Text("New playlist") }
+                }            }
         }
         if (PlaylistRepository.playlists.isEmpty()) {
             item {
@@ -154,26 +188,14 @@ private fun LibraryOverview(
 @Composable
 private fun LikedSongsPage(modifier: Modifier, onBack: () -> Unit) {
     BackHandler(onBack = onBack)
-    val songs = LibraryRepository.likedSongs
-
     Column(modifier = modifier.fillMaxSize()) {
         PageHeader(title = "Liked songs", onBack = onBack)
-        PlayButtons(songs.toList())
-        if (songs.isEmpty()) {
-            Text(
-                text = "Songs you like will show up here.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(16.dp)
-            )
-        } else {
-            LazyColumn {
-                itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
-                    SongRow(song) {
-                        PlayerController.playQueue(songs.toList(), index)
-                    }
-                }
-            }
-        }
+        LibraryCollection(
+            collectionId = "liked",
+            songs = LibraryRepository.likedSongs.toList(),
+            emptyMessage = "Songs you like will show up here.",
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
@@ -184,6 +206,12 @@ private fun PlaylistPageScreen(id: String, modifier: Modifier, onBack: () -> Uni
     var menuOpen by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var reordering by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    var artworkRunning by remember(id) { mutableStateOf(false) }
+    var stopArtwork by remember(id) { mutableStateOf(false) }
+    var artworkProgress by remember(id) { mutableStateOf<String?>(null) }
+    var artworkSummary by remember(id) { mutableStateOf<String?>(null) }
 
     val playlist = PlaylistRepository.get(id)
     if (playlist == null) {
@@ -193,11 +221,37 @@ private fun PlaylistPageScreen(id: String, modifier: Modifier, onBack: () -> Uni
 
     Column(modifier = modifier.fillMaxSize()) {
         PageHeader(title = playlist.name, onBack = onBack) {
+            if (playlist.songs.size > 1) {
+                TextButton(onClick = { reordering = !reordering }) {
+                    Text(if (reordering) "Done" else "Reorder")
+                }
+            }
             Box {
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = "Playlist options")
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Refresh artwork") },
+                        enabled = playlist.songs.isNotEmpty() && !artworkRunning,
+                        onClick = {
+                            menuOpen = false
+                            artworkRunning = true
+                            stopArtwork = false
+                            artworkSummary = null
+                            scope.launch {
+                                try {
+                                    val result = PlaylistArtwork.refresh(id, { stopArtwork }) { done, total ->
+                                        artworkProgress = "Checking artwork ($done/$total)"
+                                    }
+                                    artworkSummary = result.summary()
+                                } finally {
+                                    artworkRunning = false
+                                    artworkProgress = null
+                                }
+                            }
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text("Rename") },
                         onClick = {
@@ -216,25 +270,34 @@ private fun PlaylistPageScreen(id: String, modifier: Modifier, onBack: () -> Uni
             }
         }
 
-        PlayButtons(playlist.songs)
-
-        if (playlist.songs.isEmpty()) {
-            Text(
-                text = "No songs yet. Tap the ⋮ menu on any song and choose Add to playlist.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(16.dp)
-            )
-        } else {
-            LazyColumn {
-                itemsIndexed(playlist.songs, key = { _, song -> song.id }) { index, song ->
-                    SongRow(
-                        song = song,
-                        onRemoveFromPlaylist = { PlaylistRepository.removeSong(id, song.id) }
-                    ) {
-                        PlayerController.playQueue(playlist.songs, index)
-                    }
+        if (artworkRunning) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    artworkProgress ?: "Checking artwork…",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = { stopArtwork = true }, enabled = !stopArtwork) {
+                    Text(if (stopArtwork) "Stopping…" else "Stop")
                 }
             }
+        }
+        artworkSummary?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(16.dp))
+        }
+        if (reordering && playlist.songs.size > 1) {
+            ReorderablePlaylistList(playlist)
+        } else {
+            LibraryCollection(
+                collectionId = "playlist:$id",
+                songs = playlist.songs,
+                emptyMessage = "No songs yet. Use a song's menu to add it to this playlist.",
+                modifier = Modifier.weight(1f),
+                onRemove = { PlaylistRepository.removeSong(id, it.id) }
+            )
         }
     }
 

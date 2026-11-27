@@ -1,6 +1,10 @@
 package com.aghielaan22.label
 
+import android.content.Intent
 import android.os.Bundle
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -21,13 +25,16 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 class MainActivity : ComponentActivity() {
+    private var openPlayerFromWidget by mutableStateOf(false)
+
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState?.getBoolean("widget_player_pending") == true) openPlayerFromWidget = true
+        handleWidgetIntent(intent)
         CrashReporter.install(this)
         enableEdgeToEdge()
-        PlayerController.connect(this)
         LibraryRepository.init(this)
         HistoryRepository.init(this)
         PlaylistRepository.init(this)
@@ -35,6 +42,12 @@ class MainActivity : ComponentActivity() {
         PlaybackSettings.init(this)
         AppSettings.init(this)
         NetworkMonitor.start(this)
+        SoundEngine.init(this)
+        StatsRepository.init(this)
+        ListenBrainz.init(this)
+        UpdateChecker.init(this)
+        StudioController.init(this)
+        PlayerController.connect(this)
         if (Build.VERSION.SDK_INT >= 33) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -55,9 +68,35 @@ class MainActivity : ComponentActivity() {
             }
 
             LAbelAppTheme(darkTheme = dark) {
-                LAbelApp()
+                LAbelApp(
+                    openPlayerFromWidget = openPlayerFromWidget,
+                    onWidgetRequestHandled = { openPlayerFromWidget = false }
+                )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleWidgetIntent(intent)
+    }
+
+    private fun handleWidgetIntent(intent: Intent) {
+        if (intent.action == NowPlayingWidget.OPEN_PLAYER) {
+            openPlayerFromWidget = true
+            intent.action = null
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("widget_player_pending", openPlayerFromWidget)
+        super.onSaveInstanceState(outState)
+    }
+
+    override fun onStop() {
+        PlayerController.savePlayback()
+        super.onStop()
     }
 }
 
