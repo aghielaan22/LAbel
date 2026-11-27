@@ -15,6 +15,6 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: android-actions/setup-android@v4.0.4
-      - run: sdkmanager "platforms;android-37"
+      - run: sdkmanager "platforms;android-37.0"
       - uses: gradle/actions/setup-gradle@v4
       - run: bash gradlew :app:fastCheck --stacktrace
